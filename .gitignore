@@ -20,3 +20,6 @@ frontend/coverage/
 frontend/playwright-report/
 frontend/test-results/
 *.tsbuildinfo
+
+# Local tooling
+.claude/
