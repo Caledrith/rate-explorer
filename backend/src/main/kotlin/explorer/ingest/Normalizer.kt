@@ -1,9 +1,8 @@
 package explorer.ingest
 
 import com.fasterxml.jackson.databind.JsonNode
+import explorer.json.parseIsoDateOrNull
 import java.math.BigDecimal
-import java.time.LocalDate
-import java.time.format.DateTimeParseException
 
 /** Hands out row ids in file order, so a lower id always means earlier in the file. */
 class IdAllocator(
@@ -152,7 +151,7 @@ class Normalizer(
             providerRefId = 0,
             negotiatedType = node.text("negotiated_type"),
             rate = rate,
-            expirationDate = node.text("expiration_date")?.let(::date),
+            expirationDate = node.text("expiration_date")?.let(::parseIsoDateOrNull),
             billingClass = node.text("billing_class")?.lowercase(),
             setting = node.text("setting")?.lowercase(),
             serviceCodes = node.strings("service_code").sorted(),
@@ -160,7 +159,7 @@ class Normalizer(
             additionalInformation = additionalInformation,
             searchCode = searchCode,
             matchKind = matchKind,
-            raw = node.toString().replace("\\u0000", ""),
+            raw = node.toString(),
         )
     }
 
@@ -207,13 +206,6 @@ class Normalizer(
                 node.isNumber -> node.decimalValue()
                 node.isTextual -> node.asText().trim().toBigDecimalOrNull()
                 else -> null
-            }
-
-        private fun date(value: String): LocalDate? =
-            try {
-                LocalDate.parse(value)
-            } catch (_: DateTimeParseException) {
-                null
             }
     }
 }

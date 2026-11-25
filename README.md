@@ -33,10 +33,10 @@ Try `99213`, then add NPI `1881777464`, then click a rate. If a port is taken, c
 - **Why this matched.** Selecting a rate shows which field the code was found in, where the
   record sits in the file (`in_network[485].negotiated_rates[17].negotiated_prices[0]`), the
   NPIs it applies to, the source files and the raw JSON.
-- **Every state is handled:** file loading (real byte progress), file failed to fetch or
-  parse (with the reason and a retry), server unreachable, search failed, code not in the
-  file (with the closest codes), provider has no rates for the code (clear the filter, keep
-  the code), and invalid input.
+- **Every state is handled:** file loading (real byte progress), index or file failed to
+  fetch or parse (with the reason and a retry), a download that stalls, server unreachable,
+  search failed, code not in the file (with the closest codes), provider has no rates for
+  the code (clear the filter, keep the code), and invalid input.
 - **The address bar is the state**, so any search or open rate can be shared, and Back works.
 
 | Narrowed to one NPI, on a phone | A provider with no rate for the code |
@@ -67,10 +67,10 @@ flowchart LR
 3. **Parse.** Jackson's streaming parser walks the file one provider reference or one item at
    a time, so the document is never held in memory. Top-level keys can be in any order and
    unknown keys are skipped.
-4. **Normalize and load.** Rows go into Postgres with `COPY` inside a single transaction, so
-   searches see either the previous complete file or the new one.
-5. **Search.** Each request runs in one repeatable-read snapshot. SQL joins prices to
-   provider groups and collapses duplicates at query time (see below).
+4. **Normalize and load.** Rows go into Postgres with `COPY` inside a single transaction.
+5. **Search.** Each request runs in one repeatable-read snapshot, so a search that overlaps a
+   reload sees either the previous complete file or the new one, never a mix. SQL joins
+   prices to provider groups and collapses duplicates at query time (see below).
 
 The server answers as soon as it starts; loading runs in the background and `/api/status`
 reports it. A failed load never takes the server down, and a failed reload keeps serving the
@@ -125,6 +125,8 @@ implementation.
   a code.** It is a free-text field in the schema; this rule fits this publisher.
 - **Medians count each provider's price once**, per billing class. "vs median" always compares
   with every provider for the code, even when the search is narrowed to one.
+- **The raw record is shown as the file wrote it:** same key order, and `539.40` stays
+  `539.40` rather than becoming `539.4`.
 - **Labels are conservative.** Place-of-service names follow the CMS code set. Modifier glosses
   are my own short wording, checked against a Medicare contractor's definitions; a modifier I
   could not check is shown as the bare code. Code descriptions are only what the file itself
@@ -144,7 +146,8 @@ cd frontend && npm run e2e:up && npm run e2e && npm run e2e:down   # browser tes
   every query against a real Postgres, using a small fixture file that packs in the awkward
   cases (repeated revenue-code price, NPI of 0, inline provider groups, truncated JSON, header
   fields after the arrays). Failure paths are covered: unreachable index, missing rate file,
-  truncated file, failed reload.
+  truncated file, failed reload, a download that ends early or goes quiet (against a local
+  HTTP server), and a search that is open while the file is reloaded.
 - **Frontend:** validation, formatting, each state, and the address-bar round trip.
 - **End to end:** Playwright drives nginx, the API and Postgres in Docker, loading the fixture
   file. CI runs all three on every push.

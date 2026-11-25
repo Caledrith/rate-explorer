@@ -104,6 +104,7 @@ export function rate(overrides: Partial<RateLine> = {}): RateLine {
     negotiatedType: 'negotiated',
     vsMedianPercent: -17,
     billingClass: 'professional',
+    setting: 'outpatient',
     placeOfService: [{ code: '11', label: 'Office' }],
     modifiers: [{ code: '25', label: 'separate same-day visit' }],
     filedUnder: { kind: 'billing_code', codeType: 'CPT', code: '99213' },
@@ -150,7 +151,14 @@ export function searchResponse(overrides: Partial<SearchResponse> = {}): SearchR
       description: 'Office or other outpatient visit, established patient',
       providerCount: 3,
     },
-    summary: { providers: 3, rates: 6, providersWithBothClasses: 2, classes },
+    summary: {
+      providers: 3,
+      rates: 6,
+      providersWithBothClasses: 2,
+      distinctSettings: 1,
+      distinctNegotiatedTypes: 1,
+      classes,
+    },
     baseline: classes,
     providers: [
       provider({

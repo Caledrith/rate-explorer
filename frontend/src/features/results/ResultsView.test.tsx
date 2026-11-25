@@ -16,6 +16,15 @@ afterEach(() => vi.unstubAllGlobals())
 
 const search: SearchParams = { code: '99213', sort: 'name', page: 1 }
 
+const emptySummary = {
+  providers: 0,
+  rates: 0,
+  providersWithBothClasses: 0,
+  distinctSettings: 0,
+  distinctNegotiatedTypes: 0,
+  classes: [],
+}
+
 function setup(reply: { status?: number; body: unknown }, params: SearchParams = search) {
   const api = mockApi({ '/api/search': reply })
   const handlers = {
@@ -86,9 +95,9 @@ test('an NPI search names the NPI, counts hidden rates and offers to clear the f
   const body = searchResponse({
     query: { ...searchResponse().query, npi: '1111111111' },
     summary: {
+      ...emptySummary,
       providers: 1,
       rates: 1,
-      providersWithBothClasses: 0,
       classes: [
         { billingClass: 'professional', providers: 1, rates: 1, median: 50, min: 50, max: 50 },
       ],
@@ -116,7 +125,7 @@ test('a code that is not in the file offers the closest codes', async () => {
   const body = searchResponse({
     query: { ...searchResponse().query, code: '99216' },
     code: null,
-    summary: { providers: 0, rates: 0, providersWithBothClasses: 0, classes: [] },
+    summary: { ...emptySummary },
     baseline: [],
     providers: [],
     page: { page: 1, pageSize: 25, totalProviders: 0, totalPages: 0 },
@@ -139,7 +148,7 @@ test('a code that is not in the file offers the closest codes', async () => {
 test('a provider with no rates for the code is explained, and the code is kept', async () => {
   const body = searchResponse({
     query: { ...searchResponse().query, ein: '444444444', einDisplay: '44-4444444' },
-    summary: { providers: 0, rates: 0, providersWithBothClasses: 0, classes: [] },
+    summary: { ...emptySummary },
     providers: [],
     page: { page: 1, pageSize: 25, totalProviders: 0, totalPages: 0 },
     noResults: {
@@ -172,7 +181,7 @@ test('a provider with no rates for the code is explained, and the code is kept',
 test('an identifier that is not in the file at all says so', async () => {
   const body = searchResponse({
     query: { ...searchResponse().query, npi: '9999999999' },
-    summary: { providers: 0, rates: 0, providersWithBothClasses: 0, classes: [] },
+    summary: { ...emptySummary },
     providers: [],
     page: { page: 1, pageSize: 25, totalProviders: 0, totalPages: 0 },
     noResults: {
@@ -217,4 +226,56 @@ test('input the server rejects is listed field by field', async () => {
     await screen.findByRole('heading', { name: 'This search cannot be run' }),
   ).toBeInTheDocument()
   expect(screen.getByText('An NPI has 10 digits. This has 8.')).toBeInTheDocument()
+})
+
+test('a provider whose NPI entries are all invalid says so instead of counting zero', async () => {
+  const body = searchResponse({
+    providers: [provider({ npiCount: 0, rates: [rate({ npiCount: 0 })] })],
+  })
+  setup({ body })
+
+  expect(await screen.findByText('EIN 11-1111111 · no NPI listed')).toBeInTheDocument()
+  expect(screen.queryByText(/0 NPIs/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/0 of/)).not.toBeInTheDocument()
+})
+
+test('a rate that has no NPI among a provider that has some is marked', async () => {
+  const body = searchResponse({
+    providers: [provider({ npiCount: 1, rates: [rate({ npiCount: 0 })] })],
+  })
+  setup({ body })
+
+  expect(await screen.findByText(/no NPI listed/)).toBeInTheDocument()
+})
+
+test('setting and negotiated type appear on each rate only when the result has more than one', async () => {
+  const mixed = searchResponse()
+  mixed.summary.distinctSettings = 2
+  mixed.summary.distinctNegotiatedTypes = 2
+  setup({ body: mixed })
+
+  expect(
+    await screen.findByText('outpatient · Modifier 25 · separate same-day visit · negotiated rate'),
+  ).toBeInTheDocument()
+})
+
+test('an NPI that is in the file but has no rate for the code is explained in NPI terms', async () => {
+  const body = searchResponse({
+    query: { ...searchResponse().query, npi: '5555555555' },
+    summary: { ...emptySummary },
+    providers: [],
+    page: { page: 1, pageSize: 25, totalProviders: 0, totalPages: 0 },
+    noResults: {
+      reason: 'provider_has_no_rates_for_code',
+      closestCodes: [],
+      ein: null,
+      npi: { npi: '5555555555', inFile: true, providerCount: 3 },
+    },
+  })
+  setup({ body }, { ...search, npi: '5555555555' })
+
+  expect(
+    await screen.findByText('NPI 5555555555 is in this file under 3 providers.'),
+  ).toBeInTheDocument()
+  expect(screen.getByText('It has no 99213 rate with any of them.')).toBeInTheDocument()
 })

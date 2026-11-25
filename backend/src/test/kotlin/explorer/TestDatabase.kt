@@ -26,7 +26,6 @@ object TestDatabase {
             database.migrate()
             database.jdbi.useHandle<Exception> { handle ->
                 handle.execute("truncate source_file cascade")
-                handle.execute("refresh materialized view code_catalog")
             }
         }
 

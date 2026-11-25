@@ -38,45 +38,50 @@ export function ResultsView({
   const hasProviderFilter = result.query.npi !== null || result.query.ein !== null
   const showList = !result.noResults || result.noResults.reason === 'no_rates_in_class'
 
+  // On narrow screens an open rate takes the whole screen, so everything else steps aside.
+  const behindPanel = selectedRate ? 'max-lg:hidden' : undefined
+
   return (
     <div className="flex flex-col gap-3">
-      <ResultHeading result={result} file={file} />
+      <div className={cx('contents', behindPanel)}>
+        <ResultHeading result={result} file={file} />
 
-      {hasProviderFilter && (
-        <div className="flex flex-wrap items-center gap-2.5">
-          <span className="rounded-lg border border-line-strong bg-surface px-2.5 py-1 tabular-nums">
-            {[
-              result.query.npi && (
-                <span key="npi">
-                  Provider NPI <strong>{result.query.npi}</strong>
-                </span>
-              ),
-              result.query.ein && (
-                <span key="ein">
-                  {result.query.npi && ' · '}Provider EIN{' '}
-                  <strong>{formatEin(result.query.ein)}</strong>
-                </span>
-              ),
-            ]}
-          </span>
-          <Button size="sm" onClick={onClearProvider}>
-            Clear provider filter
-          </Button>
-          {result.query.npi && result.summary.providers > 1 && (
-            <span className="text-meta text-muted">
-              This NPI is listed under {plural(result.summary.providers, 'provider')}. Only rates
-              that apply to it are shown.
+        {hasProviderFilter && (
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="rounded-lg border border-line-strong bg-surface px-2.5 py-1 tabular-nums">
+              {[
+                result.query.npi && (
+                  <span key="npi">
+                    Provider NPI <strong>{result.query.npi}</strong>
+                  </span>
+                ),
+                result.query.ein && (
+                  <span key="ein">
+                    {result.query.npi && ' · '}Provider EIN{' '}
+                    <strong>{formatEin(result.query.ein)}</strong>
+                  </span>
+                ),
+              ]}
             </span>
-          )}
-        </div>
-      )}
+            <Button size="sm" onClick={onClearProvider}>
+              Clear provider filter
+            </Button>
+            {result.query.npi && result.summary.providers > 1 && (
+              <span className="text-meta text-muted">
+                This NPI is listed under {plural(result.summary.providers, 'provider')}. Only rates
+                that apply to it are shown.
+              </span>
+            )}
+          </div>
+        )}
 
-      {showList && (
-        <SummaryTiles
-          result={result}
-          onSelectClass={(billingClass) => onRefine({ billingClass })}
-        />
-      )}
+        {showList && (
+          <SummaryTiles
+            result={result}
+            onSelectClass={(billingClass) => onRefine({ billingClass })}
+          />
+        )}
+      </div>
 
       {result.noResults ? (
         <NoResultsNotice
@@ -87,7 +92,7 @@ export function ResultsView({
         />
       ) : (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className={cx('flex flex-wrap items-center justify-between gap-3', behindPanel)}>
             <p className="text-meta text-muted">
               <span className="font-semibold text-ink">
                 <span className="md:hidden">Tap</span>
@@ -117,11 +122,13 @@ export function ResultsView({
               selectedRate && 'lg:grid-cols-[minmax(0,1fr)_25rem]',
             )}
           >
-            <div className="flex min-w-0 flex-col gap-3">
+            <div className={cx('flex min-w-0 flex-col gap-3', behindPanel)}>
               <ProviderList
                 providers={result.providers}
                 selectedRate={selectedRate}
                 onSelectRate={onSelectRate}
+                showSetting={result.summary.distinctSettings > 1}
+                showNegotiatedType={result.summary.distinctNegotiatedTypes > 1}
                 stale={isPlaceholderData}
               />
               <Pagination

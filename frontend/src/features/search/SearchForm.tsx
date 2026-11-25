@@ -23,17 +23,23 @@ interface Props {
  * Billing code (required) plus optional NPI and EIN. On wide screens it sits in the
  * header; on phones it collapses to one line once a search is showing.
  *
- * The parent gives this component a `key` that changes with the applied search, so the
- * fields always start from what the address bar says.
+ * The fields follow the applied search, so they always show what the address bar says.
  */
 export function SearchForm({ applied, ready, onSubmit }: Props) {
-  const [draft, setDraft] = useState<SearchDraft>({
-    code: applied?.code ?? '',
-    npi: applied?.npi ?? '',
-    ein: applied?.ein ? formatEin(applied.ein) : '',
-  })
+  const [draft, setDraft] = useState<SearchDraft>(() => draftFrom(applied))
   const [errors, setErrors] = useState<DraftErrors>({})
   const [editing, setEditing] = useState(applied === null)
+
+  // When the applied search changes (a new search, Back, a shared link), the fields follow
+  // it. Resetting state during render, rather than remounting, keeps keyboard focus where it is.
+  const appliedKey = `${applied?.code ?? ''}|${applied?.npi ?? ''}|${applied?.ein ?? ''}`
+  const [syncedKey, setSyncedKey] = useState(appliedKey)
+  if (syncedKey !== appliedKey) {
+    setSyncedKey(appliedKey)
+    setDraft(draftFrom(applied))
+    setErrors({})
+    setEditing(applied === null)
+  }
 
   const typedCode = useDeferredValue(draft.code.trim().toUpperCase())
   const suggestions = useCodeSuggestions(typedCode, ready && /^[A-Z0-9]{0,7}$/.test(typedCode))
@@ -146,6 +152,14 @@ export function SearchForm({ applied, ready, onSubmit }: Props) {
   )
 }
 
+function draftFrom(applied: SearchParams | null): SearchDraft {
+  return {
+    code: applied?.code ?? '',
+    npi: applied?.npi ?? '',
+    ein: applied?.ein ? formatEin(applied.ein) : '',
+  }
+}
+
 function optionLabel(type: string | null, name: string | null): string {
   return [type, name && sentenceCase(name)].filter(Boolean).join(' · ')
 }
@@ -197,7 +211,7 @@ function Field({
         {...input}
       />
       {error && (
-        <span id={errorId} className="text-meta text-danger">
+        <span id={errorId} role="alert" className="text-meta text-danger">
           {error}
         </span>
       )}

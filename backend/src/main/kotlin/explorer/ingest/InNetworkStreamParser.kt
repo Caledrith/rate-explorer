@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.JsonToken
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import explorer.json.Json
 import java.io.InputStream
 
 /** Top-level scalar fields of an in-network file. They may appear before or after the arrays. */
@@ -13,6 +14,11 @@ data class RateFileHeader(
     val version: String? = null,
     val lastUpdatedOn: String? = null,
 )
+
+/** The file is valid JSON but not shaped like an in-network file. */
+class RateFileFormatException(
+    message: String,
+) : RuntimeException(message)
 
 interface RateFileHandler {
     fun providerReference(node: JsonNode)
@@ -34,7 +40,8 @@ interface RateFileHandler {
  * JsonProcessingException, which carries the position where parsing stopped.
  */
 class InNetworkStreamParser(
-    private val mapper: ObjectMapper = ObjectMapper(),
+    // Decimals are kept as written (539.40, not 539.4) so the raw record shown later is faithful.
+    private val mapper: ObjectMapper = Json.exact,
 ) {
     fun parse(
         input: InputStream,
@@ -43,7 +50,7 @@ class InNetworkStreamParser(
         var header = RateFileHeader()
         mapper.factory.createParser(input).use { parser ->
             if (parser.nextToken() != JsonToken.START_OBJECT) {
-                throw IllegalArgumentException("An in-network file must be a JSON object at the top level.")
+                throw RateFileFormatException("An in-network file must be a JSON object at the top level.")
             }
             while (parser.nextToken() == JsonToken.FIELD_NAME) {
                 val field = parser.currentName()

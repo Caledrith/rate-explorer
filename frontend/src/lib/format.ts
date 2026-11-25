@@ -24,8 +24,8 @@ export function formatMegabytes(bytes: number): string {
 }
 
 /**
- * How a rate sits against the median for its class. Within one percent reads as
- * "At median"; the sign uses a real minus so columns of numbers line up.
+ * How a rate sits against the median for its class. A difference that rounds to zero
+ * reads as "At median"; the sign uses a real minus so columns of numbers line up.
  */
 export function formatVsMedian(percent: number | null): { text: string; notable: boolean } | null {
   if (percent === null) return null

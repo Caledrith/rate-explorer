@@ -8,6 +8,9 @@ interface Props {
   rate: Rate
   /** NPIs billing this code under the provider, to say when a rate covers only some of them. */
   providerNpiCount: number
+  /** Setting and negotiated type are shown only when the result has more than one of them. */
+  showSetting: boolean
+  showNegotiatedType: boolean
   selected: boolean
   onSelect: (id: string) => void
 }
@@ -19,9 +22,22 @@ interface Props {
  * badge, and a rate at the median is grey. Only the exceptions carry weight - the amber
  * badge for a rate filed under a revenue code, and bold for a rate far from the median.
  */
-export function RateLine({ rate, providerNpiCount, selected, onSelect }: Props) {
+export function RateLine({
+  rate,
+  providerNpiCount,
+  showSetting,
+  showNegotiatedType,
+  selected,
+  onSelect,
+}: Props) {
   const vsMedian = formatVsMedian(rate.vsMedianPercent)
-  const partial = rate.npiCount < providerNpiCount
+  const detail = [
+    showSetting && rate.setting,
+    modifierText(rate.modifiers),
+    showNegotiatedType && rate.negotiatedType && `${rate.negotiatedType} rate`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <button
@@ -58,14 +74,9 @@ export function RateLine({ rate, providerNpiCount, selected, onSelect }: Props) 
         <span className="min-w-0">
           <span className="block">
             {placeOfServiceText(rate.placeOfService)}
-            {partial && (
-              <span className="text-meta text-muted">
-                {' '}
-                · {rate.npiCount} of {providerNpiCount} NPIs
-              </span>
-            )}
+            <NpiCoverage covered={rate.npiCount} of={providerNpiCount} />
           </span>
-          <span className="block text-meta text-muted">{modifierText(rate.modifiers)}</span>
+          <span className="block text-meta text-muted">{detail}</span>
         </span>
         <span>
           {rate.filedUnder.kind === 'additional_information' && (
@@ -83,5 +94,16 @@ export function RateLine({ rate, providerNpiCount, selected, onSelect }: Props) 
         ›
       </span>
     </button>
+  )
+}
+
+/** Says so when a rate covers only some of the provider's NPIs, or none the file could name. */
+function NpiCoverage({ covered, of }: { covered: number; of: number }) {
+  if (covered >= of) return null
+  return (
+    <span className="text-meta text-muted">
+      {' '}
+      · {covered === 0 ? 'no NPI listed' : `${covered} of ${of} NPIs`}
+    </span>
   )
 }

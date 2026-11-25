@@ -10,7 +10,9 @@ import explorer.api.ValidationException
  */
 object InputNormalizer {
     private val CODE = Regex("^[A-Z0-9]{2,7}$")
-    private val CLASSES = setOf("professional", "institutional")
+
+    // The schema names professional and institutional, but the filter accepts whatever class the file uses.
+    private val CLASS = Regex("^[a-z][a-z_ -]{0,29}$")
 
     fun parse(params: Map<String, String?>): SearchQuery {
         val errors = mutableListOf<FieldError>()
@@ -25,8 +27,8 @@ object InputNormalizer {
         val ein = digits(params["ein"], "ein", "An EIN", 9, errors)
 
         val billingClass = params["class"]?.trim()?.lowercase()?.takeIf(String::isNotEmpty)
-        if (billingClass != null && billingClass !in CLASSES) {
-            errors += FieldError("class", "Class is professional or institutional.")
+        if (billingClass != null && !CLASS.matches(billingClass)) {
+            errors += FieldError("class", "Class is a billing class such as professional or institutional.")
         }
 
         val sort =

@@ -16,8 +16,10 @@ interface Props {
 /**
  * "Why this matched": traces one rate back to the exact record in the source file.
  *
- * It sits beside the list on wide screens and takes the whole screen on small ones.
- * Opening it moves focus to its heading; Escape or Close returns focus to the rate.
+ * On wide screens it is a column beside the list. On narrow ones the rest of the page is
+ * hidden while it is open (see `max-lg:hidden` in App and ResultsView), so it is the only
+ * thing on screen and the only thing in the tab order, with no focus trap to maintain.
+ * Opening it moves focus to its heading; Escape or the close button returns focus to the rate.
  */
 export function MatchPanel({ id, searchedNpi, onClose }: Props) {
   const { data, error, isPending } = useRateDetail(id)
@@ -29,13 +31,20 @@ export function MatchPanel({ id, searchedNpi, onClose }: Props) {
 
   function close() {
     onClose()
-    // After the panel unmounts, put focus back where the reader was.
-    requestAnimationFrame(() => document.getElementById(rateElementId(id))?.focus())
+    // Once the list is back on screen, return to the rate the reader came from.
+    requestAnimationFrame(() => {
+      const rate = document.getElementById(rateElementId(id))
+      rate?.scrollIntoView({ block: 'nearest' })
+      rate?.focus({ preventScroll: true })
+    })
   }
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') close()
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      // Escape inside a field belongs to that field (it dismisses suggestions or a menu).
+      if (event.target instanceof Element && event.target.closest('input, select, textarea')) return
+      close()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -45,8 +54,9 @@ export function MatchPanel({ id, searchedNpi, onClose }: Props) {
     <aside
       aria-labelledby="match-panel-title"
       className={cx(
-        'fixed inset-0 z-20 flex flex-col overflow-y-auto bg-surface',
-        'lg:sticky lg:inset-auto lg:top-4 lg:z-auto lg:max-h-[calc(100dvh-2rem)] lg:rounded-xl lg:border lg:border-line-strong',
+        'flex flex-col bg-surface',
+        'max-lg:-mx-4 max-lg:-my-5 max-lg:min-h-dvh md:max-lg:-mx-8',
+        'lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto lg:rounded-xl lg:border lg:border-line-strong',
       )}
     >
       <div className="sticky top-0 flex items-center gap-3 border-b border-line bg-surface px-4 py-2.5 lg:justify-between lg:px-5">
@@ -105,6 +115,20 @@ function Detail({ detail, searchedNpi }: { detail: RateDetail; searchedNpi: stri
   const { match, provider, occurrences, location, source } = detail
   const viaRevenueCode = match.kind === 'additional_information'
   const filed = `${codeTypeName(match.filedUnder.codeType)} ${match.filedUnder.code}`
+  const terms = [
+    classLabel(detail.billingClass),
+    detail.setting,
+    placeOfServiceText(detail.placeOfService),
+    lowerFirst(modifierText(detail.modifiers)),
+  ].filter(Boolean)
+  const contract = [
+    detail.negotiatedType && `${classLabel(detail.negotiatedType)} rate`,
+    detail.noEndDate
+      ? 'no end date'
+      : detail.expirationDate
+        ? `expires ${detail.expirationDate}`
+        : 'no end date stated',
+  ].filter(Boolean)
 
   return (
     <>
@@ -115,13 +139,15 @@ function Detail({ detail, searchedNpi }: { detail: RateDetail; searchedNpi: stri
         <p className="mt-1.5 font-semibold">{provider.name}</p>
         <p className="text-meta text-muted tabular-nums">
           {provider.tinType === 'ein' ? 'EIN' : 'Tax ID'} {provider.tinDisplay} ·{' '}
-          {plural(provider.npiCount, 'NPI')}
+          {provider.npiCount === 0 ? 'no NPI listed' : plural(provider.npiCount, 'NPI')}
         </p>
-        <p className="text-meta text-muted">
-          {classLabel(detail.billingClass)} · {placeOfServiceText(detail.placeOfService)} ·{' '}
-          {modifierText(detail.modifiers).toLowerCase()}
-          {!detail.noEndDate && detail.expirationDate && ` · expires ${detail.expirationDate}`}
-        </p>
+        <p className="text-meta text-muted">{terms.join(' · ')}</p>
+        <p className="text-meta text-muted">{contract.join(' · ')}</p>
+        {provider.nameCount > 1 && (
+          <p className="text-meta text-muted">
+            The file spells this provider's name {provider.nameCount} ways. This is the most common.
+          </p>
+        )}
       </div>
 
       {/* The answer comes first: where the searched code was found. */}
@@ -193,11 +219,7 @@ function Detail({ detail, searchedNpi }: { detail: RateDetail; searchedNpi: stri
         <h3 className="mb-2 font-bold">NPIs this rate applies to</h3>
         <NpiChips values={detail.npis.values} highlight={searchedNpi} />
         <p className="mt-1.5 text-meta text-muted">
-          {detail.otherNpis.total === 0
-            ? detail.npis.total === 1
-              ? 'The only NPI billing this code under this provider.'
-              : `All ${formatCount(detail.npis.total)} NPIs billing this code under this provider.`
-            : `${formatCount(detail.npis.total)} of this provider's ${formatCount(provider.npiCount)} NPIs. The other ${formatCount(detail.otherNpis.total)} ${detail.otherNpis.total === 1 ? 'is' : 'are'} on a different rate:`}
+          {npiSentence(detail)}
           {detail.npis.total > detail.npis.values.length &&
             ` Showing the first ${detail.npis.values.length}.`}
         </p>
@@ -216,9 +238,7 @@ function Detail({ detail, searchedNpi }: { detail: RateDetail; searchedNpi: stri
           >
             in_network[{location.itemIndex}]
           </Location>
-          <Location label="Price">
-            negotiated_rates[{location.rateIndex}].negotiated_prices[{location.priceIndex}]
-          </Location>
+          <Location label="Price, full path">{location.path}</Location>
           <Location label="Provider group">
             {location.providerGroupId === null
               ? 'provider_groups written on the rate itself'
@@ -250,7 +270,7 @@ function Detail({ detail, searchedNpi }: { detail: RateDetail; searchedNpi: stri
         <details className="border-y border-line-soft py-2.5">
           <summary className="font-semibold">Raw record</summary>
           <pre className="mt-2.5 overflow-x-auto rounded-lg bg-code px-4 py-3.5 font-mono text-meta leading-relaxed text-code-ink">
-            {JSON.stringify(detail.raw, null, 2)}
+            {detail.raw}
           </pre>
         </details>
       </div>
@@ -258,7 +278,25 @@ function Detail({ detail, searchedNpi }: { detail: RateDetail; searchedNpi: stri
   )
 }
 
+/** "Modifier 25 · separate E/M" reads mid-sentence as "modifier 25 · separate E/M"; abbreviations keep their capitals. */
+function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1)
+}
+
+/** How the NPIs on this rate relate to the provider's NPIs for the code. */
+function npiSentence(detail: RateDetail): string {
+  const { npis, otherNpis, provider } = detail
+  if (npis.total === 0) return 'The file lists no valid NPI for this rate.'
+  if (otherNpis.total === 0) {
+    return npis.total === 1
+      ? 'The only NPI billing this code under this provider.'
+      : `All ${formatCount(npis.total)} NPIs billing this code under this provider.`
+  }
+  return `${formatCount(npis.total)} of this provider's ${formatCount(provider.npiCount)} NPIs. The other ${formatCount(otherNpis.total)} ${otherNpis.total === 1 ? 'is' : 'are'} on a different rate:`
+}
+
 function NpiChips({ values, highlight }: { values: string[]; highlight: string | null }) {
+  if (values.length === 0) return null
   return (
     <ul className="flex flex-wrap gap-1.5">
       {values.map((npi) => (

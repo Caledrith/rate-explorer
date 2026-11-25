@@ -114,33 +114,33 @@ export function NoResultsNotice({
   }
 }
 
-/** Separates "this provider is not in the file" from "it is, but has no rate for this code". */
+/**
+ * Separates "this identifier is not in the file" from "it is, but has no rate for this
+ * code", for an EIN, an NPI, or both together.
+ */
 function providerSentences(code: string, noResults: NoResults): string[] {
-  const sentences: string[] = []
   const { ein, npi } = noResults
+  const sentences: string[] = []
+
+  if (ein && !ein.inFile) sentences.push(`EIN ${ein.einDisplay} is not in this file.`)
+  if (npi && !npi.inFile) sentences.push(`NPI ${npi.npi} is not in this file.`)
+  if (sentences.length > 0) return sentences
 
   if (ein) {
     sentences.push(
-      ein.inFile
-        ? `EIN ${ein.einDisplay} is in this file as ${ein.name ?? 'an unnamed provider'}, with rates for ${plural(ein.codeCount, 'code')}.`
-        : `EIN ${ein.einDisplay} is not in this file.`,
+      `EIN ${ein.einDisplay} is in this file as ${ein.name ?? 'an unnamed provider'}, with rates for ${plural(ein.codeCount, 'code')}.`,
     )
   }
   if (npi) {
-    sentences.push(
-      npi.inFile
-        ? `NPI ${npi.npi} is in this file under ${plural(npi.providerCount, 'provider')}.`
-        : `NPI ${npi.npi} is not in this file.`,
-    )
+    sentences.push(`NPI ${npi.npi} is in this file under ${plural(npi.providerCount, 'provider')}.`)
   }
-  const known = [ein?.inFile, npi?.inFile].filter((value) => value !== undefined)
-  if (known.length > 0 && known.every(Boolean)) {
+  if (ein && npi) sentences.push(`No ${code} rate applies to that EIN and NPI together.`)
+  else if (ein)
+    sentences.push(ein.codeCount === 1 ? `It is not ${code}.` : `None of them is ${code}.`)
+  else if (npi)
     sentences.push(
-      ein && npi
-        ? `None of that provider's ${code} rates apply to this EIN and NPI together.`
-        : `None of them is ${code}.`,
+      `It has no ${code} rate with ${npi.providerCount === 1 ? 'that provider' : 'any of them'}.`,
     )
-  }
   return sentences
 }
 

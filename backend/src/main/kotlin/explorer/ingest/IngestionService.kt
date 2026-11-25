@@ -5,21 +5,22 @@ import com.fasterxml.jackson.databind.JsonNode
 import explorer.config.AppConfig
 import explorer.db.Database
 import explorer.json.Json
+import explorer.json.parseIsoDateOrNull
 import explorer.toc.IndexFormatException
+import explorer.toc.IndexUnavailableException
 import explorer.toc.NoRateFileException
 import explorer.toc.RateFileSelector
 import explorer.toc.SelectedRateFile
 import explorer.toc.TocClient
 import org.slf4j.LoggerFactory
 import java.io.FilterInputStream
+import java.io.IOException
 import java.io.InputStream
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.Connection
 import java.sql.SQLException
-import java.time.LocalDate
-import java.time.format.DateTimeParseException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
@@ -42,7 +43,7 @@ sealed interface IngestState {
 
     data class Ready(
         val sourceFileId: Long,
-        /** Set when the app is serving an earlier load because the latest attempt could not check the index. */
+        /** Set when the app is serving an earlier load because the latest attempt failed. */
         val warning: String? = null,
     ) : IngestState
 
@@ -69,6 +70,7 @@ class IngestionService(
     private val running = AtomicBoolean(false)
 
     private val terminal = AtomicReference<IngestState>(IngestState.Idle)
+    private val activeUrl = AtomicReference<String?>(null)
     private val phase = AtomicReference(IngestPhase.FETCHING_INDEX)
     private val bytesDone = AtomicLong()
     private val bytesTotal = AtomicLong(-1)
@@ -81,8 +83,13 @@ class IngestionService(
             terminal.get()
         }
 
-    /** Id of the file searches should read, or null while nothing is loaded. */
-    fun activeSourceFileId(): Long? = (terminal.get() as? IngestState.Ready)?.sourceFileId
+    /**
+     * URL of the rate file this configuration points at, once a load of it has succeeded.
+     * Searches and the status page both follow it, so they always describe the same file.
+     * It names the file by URL rather than row id because a reload gives the file a new id;
+     * a search resolves the id inside its own snapshot and so never sees a half-replaced file.
+     */
+    fun activeFileUrl(): String? = activeUrl.get()
 
     /** Starts a load in the background. Returns false when one is already running. */
     fun startAsync(force: Boolean = false): Boolean {
@@ -91,7 +98,7 @@ class IngestionService(
         return true
     }
 
-    /** Runs a load on the calling thread. Used by tests and the first load in fixture mode. */
+    /** Runs a load on the calling thread. Used by tests. */
     fun runNow(force: Boolean = false): IngestState {
         if (!running.compareAndSet(false, true)) return state()
         runGuarded(force)
@@ -103,7 +110,9 @@ class IngestionService(
             enter(IngestPhase.FETCHING_INDEX, total = null)
             fileName.set(null)
             terminal.set(run(force))
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // Throwable, not Exception: running out of memory on a huge file must also end in
+            // a visible failure rather than a status stuck on "loading".
             val failure = classify(e)
             log.error("Ingestion failed ({}): {}", failure.kind, failure.message, e)
             // Keep serving data from an earlier successful load if there is one.
@@ -120,18 +129,24 @@ class IngestionService(
             try {
                 RateFileSelector.select(TocClient(fetcher).fetch(indexUrl), indexUrl, config.planNameContains)
             } catch (e: Exception) {
-                // The index is unreachable or unusable. Data loaded earlier is still good.
-                val existing = existingSourceFileForIndex(config.indexUrl) ?: throw e
-                val warning = "The index could not be checked (${classify(e).message}); showing the file loaded earlier."
+                val problem = if (e is IOException) IndexUnavailableException("The index file could not be fetched. ${e.message}", e) else e
+                // The index is unreachable or unusable. Data loaded from it earlier is still good.
+                val existing = latestSourceFileForIndex(config.indexUrl) ?: throw problem
+                val warning = "The index could not be checked (${classify(problem).message}); showing the file loaded earlier."
                 log.warn(warning)
-                return IngestState.Ready(existing, warning)
+                activeUrl.set(existing.fileUrl)
+                return IngestState.Ready(existing.id, warning)
             }
         fileName.set(selected.fileName)
         log.info("Index selected reporting_structure[{}]: {}", selected.structureIndex, selected.url)
+        if (selected.filesInStructure > 1) {
+            log.warn("That reporting structure lists {} in-network files; only the first is loaded", selected.filesInStructure)
+        }
 
         if (!force) {
-            existingSourceFile(selected.url.toString())?.let { id ->
+            sourceFileId(selected.url.toString())?.let { id ->
                 log.info("Rate file already loaded as source_file {}; skipping ingestion", id)
+                activeUrl.set(selected.url.toString())
                 return IngestState.Ready(id)
             }
         }
@@ -144,6 +159,7 @@ class IngestionService(
             }
 
         val id = load(path, selected)
+        activeUrl.set(selected.url.toString())
         log.info("Loaded {} as source_file {}", selected.fileName, id)
         return IngestState.Ready(id)
     }
@@ -151,73 +167,86 @@ class IngestionService(
     private fun load(
         path: Path,
         selected: SelectedRateFile,
-    ): Long =
-        database.dataSource.connection.use { connection ->
-            connection.autoCommit = false
-            try {
-                // Replacing a file is delete-then-insert in one transaction; cascades remove its old rows.
-                connection.update("delete from source_file where file_url = ?", selected.url.toString())
-                val sourceFileId = insertSourceFile(connection, selected, Files.size(path))
-                insertPlans(connection, sourceFileId, selected)
-
-                val stats = IngestStats()
-                val normalizer =
-                    Normalizer(
-                        stats,
-                        groupIds = IdAllocator(connection.maxId("provider_group")),
-                        itemIds = IdAllocator(connection.maxId("billing_item")),
-                        priceIds = IdAllocator(connection.maxId("price_record")),
-                    )
-                val loader = BulkLoader(connection, sourceFileId)
-
-                enter(IngestPhase.PARSING, total = Files.size(path))
-                val parseStarted = System.nanoTime()
-                val header =
-                    open(path).use { input ->
-                        InNetworkStreamParser().parse(
-                            input,
-                            object : RateFileHandler {
-                                override fun providerReference(node: JsonNode) = normalizer.providerReference(node).forEach(loader::add)
-
-                                override fun inNetworkItem(
-                                    index: Int,
-                                    node: JsonNode,
-                                ) {
-                                    normalizer.item(index, node)?.let(loader::add)
-                                }
-
-                                override fun unknownTopLevelField(name: String) {
-                                    stats.unknownTopLevelFields += name
-                                }
-                            },
-                        )
-                    }
-                loader.flush()
-                val indexStarted = System.nanoTime()
-                log.info("Parsed and copied {} prices in {} ms", stats.prices, (indexStarted - parseStarted) / 1_000_000)
-
-                enter(IngestPhase.INDEXING, total = null)
-                connection.update(DERIVE_PROVIDERS, sourceFileId)
-                connection.update(
-                    UPDATE_SOURCE_FILE,
-                    header.reportingEntityName,
-                    header.reportingEntityType,
-                    header.version,
-                    header.lastUpdatedOn?.let(::parseDate),
-                    Json.api.writeValueAsString(stats.toMap()),
-                    sourceFileId,
-                )
-                connection.createStatement().use { it.execute("refresh materialized view code_catalog") }
-                connection.commit()
-                log.info("Derived providers and the code catalog in {} ms", (System.nanoTime() - indexStarted) / 1_000_000)
-                connection.autoCommit = true
-                connection.createStatement().use { it.execute("analyze") }
-                sourceFileId
-            } catch (e: Exception) {
-                connection.rollback()
-                throw e
+    ): Long {
+        val sourceFileId =
+            database.dataSource.connection.use { connection ->
+                connection.autoCommit = false
+                try {
+                    // Replacing a file is delete-then-insert in one transaction; cascades remove its old rows.
+                    connection.update("delete from source_file where file_url = ?", selected.url.toString())
+                    val id = insertSourceFile(connection, selected, Files.size(path))
+                    insertPlans(connection, id, selected)
+                    copyRates(connection, id, path)
+                    connection.commit()
+                    id
+                } catch (e: Throwable) {
+                    connection.rollback()
+                    throw e
+                }
             }
-        }
+        // Fresh statistics keep the search queries on their indexes. The load has already
+        // committed, so a failure here is logged and not reported as a failed load.
+        runCatching { database.jdbi.useHandle<Exception> { it.execute("analyze") } }
+            .onFailure { log.warn("ANALYZE after the load failed", it) }
+        return sourceFileId
+    }
+
+    /** Streams the file into the base tables, then derives the per-file lookup tables. */
+    private fun copyRates(
+        connection: Connection,
+        sourceFileId: Long,
+        path: Path,
+    ) {
+        val stats = IngestStats()
+        val normalizer =
+            Normalizer(
+                stats,
+                groupIds = IdAllocator(connection.maxId("provider_group")),
+                itemIds = IdAllocator(connection.maxId("billing_item")),
+                priceIds = IdAllocator(connection.maxId("price_record")),
+            )
+        val loader = BulkLoader(connection, sourceFileId)
+
+        enter(IngestPhase.PARSING, total = Files.size(path))
+        val parseStarted = System.nanoTime()
+        val header =
+            open(path).use { input ->
+                InNetworkStreamParser().parse(
+                    input,
+                    object : RateFileHandler {
+                        override fun providerReference(node: JsonNode) = normalizer.providerReference(node).forEach(loader::add)
+
+                        override fun inNetworkItem(
+                            index: Int,
+                            node: JsonNode,
+                        ) {
+                            normalizer.item(index, node)?.let(loader::add)
+                        }
+
+                        override fun unknownTopLevelField(name: String) {
+                            stats.unknownTopLevelFields += name
+                        }
+                    },
+                )
+            }
+        loader.flush()
+        val indexStarted = System.nanoTime()
+        log.info("Parsed and copied {} prices in {} ms", stats.prices, (indexStarted - parseStarted) / 1_000_000)
+
+        enter(IngestPhase.INDEXING, total = null)
+        connection.update(DERIVE_PROVIDERS, sourceFileId)
+        connection.update(BUILD_CODE_CATALOG, sourceFileId)
+        connection.update(
+            UPDATE_SOURCE_FILE,
+            header.reportingEntityName,
+            header.reportingEntityType,
+            header.version,
+            header.lastUpdatedOn?.let(::parseIsoDateOrNull),
+            Json.api.writeValueAsString(stats.toMap()),
+            sourceFileId,
+        )
+        log.info("Derived providers and the code catalog in {} ms", (System.nanoTime() - indexStarted) / 1_000_000)
+    }
 
     /** Opens the cached file, counting compressed bytes read so progress matches the file size. */
     private fun open(path: Path): InputStream {
@@ -243,7 +272,7 @@ class IngestionService(
         bytesTotal.set(total ?: -1)
     }
 
-    private fun existingSourceFile(fileUrl: String): Long? =
+    private fun sourceFileId(fileUrl: String): Long? =
         database.jdbi.withHandle<Long?, Exception> { handle ->
             handle
                 .createQuery("select id from source_file where file_url = :url")
@@ -253,12 +282,17 @@ class IngestionService(
                 .orElse(null)
         }
 
-    private fun existingSourceFileForIndex(indexUrl: String): Long? =
-        database.jdbi.withHandle<Long?, Exception> { handle ->
+    private data class LoadedFile(
+        val id: Long,
+        val fileUrl: String,
+    )
+
+    private fun latestSourceFileForIndex(indexUrl: String): LoadedFile? =
+        database.jdbi.withHandle<LoadedFile?, Exception> { handle ->
             handle
-                .createQuery("select id from source_file where index_url = :url order by ingested_at desc limit 1")
+                .createQuery("select id, file_url from source_file where index_url = :url order by ingested_at desc, id desc limit 1")
                 .bind("url", indexUrl)
-                .mapTo(Long::class.javaObjectType)
+                .map { rows, _ -> LoadedFile(rows.getLong("id"), rows.getString("file_url")) }
                 .findOne()
                 .orElse(null)
         }
@@ -312,11 +346,11 @@ class IngestionService(
             }
     }
 
-    private fun classify(e: Exception): IngestState.Failed {
+    private fun classify(e: Throwable): IngestState.Failed {
         val name = fileName.get()
         return when (e) {
-            is NoRateFileException -> IngestState.Failed(IngestErrorKind.INDEX, e.message ?: "The index has no usable rate file.", name)
-            is IndexFormatException -> IngestState.Failed(IngestErrorKind.INDEX, e.message ?: "The index file could not be read.", name)
+            is NoRateFileException, is IndexFormatException, is IndexUnavailableException ->
+                IngestState.Failed(IngestErrorKind.INDEX, e.message ?: "The index file could not be used.", name)
             is FetchException -> IngestState.Failed(IngestErrorKind.FETCH, e.message ?: "The download failed.", name)
             is JsonProcessingException ->
                 IngestState.Failed(
@@ -324,8 +358,14 @@ class IngestionService(
                     "${e.originalMessage} (line ${e.location?.lineNr ?: "?"}, byte ${e.location?.byteOffset ?: "?"})",
                     name,
                 )
+            is RateFileFormatException ->
+                IngestState.Failed(
+                    IngestErrorKind.PARSE,
+                    e.message ?: "The file is not an in-network file.",
+                    name,
+                )
             is SQLException -> IngestState.Failed(IngestErrorKind.DATABASE, e.message ?: "The database rejected the load.", name)
-            is java.io.IOException -> IngestState.Failed(IngestErrorKind.FETCH, e.message ?: e.javaClass.simpleName, name)
+            is IOException -> IngestState.Failed(IngestErrorKind.FETCH, e.message ?: e.javaClass.simpleName, name)
             else -> IngestState.Failed(IngestErrorKind.UNEXPECTED, e.message ?: e.javaClass.simpleName, name)
         }
     }
@@ -348,6 +388,23 @@ class IngestionService(
             order by tin, uses desc, business_name collate "C"
             """.trimIndent()
 
+        /** One row per searchable code, with the type and names of the item filed under the code itself, if any. */
+        val BUILD_CODE_CATALOG =
+            """
+            insert into code_catalog (source_file_id, code, code_type, name, description, provider_count)
+            select pr.source_file_id,
+                   pr.search_code,
+                   min(bi.billing_code_type) filter (where pr.match_kind = 'billing_code'),
+                   min(bi.name) filter (where pr.match_kind = 'billing_code' and upper(bi.billing_code_type) <> 'RC'),
+                   min(bi.description) filter (where pr.match_kind = 'billing_code' and upper(bi.billing_code_type) <> 'RC'),
+                   count(distinct pg.tin)
+            from price_record pr
+            join billing_item bi on bi.id = pr.billing_item_id
+            join provider_group pg on pg.source_file_id = pr.source_file_id and pg.ref_id = pr.provider_ref_id
+            where pr.source_file_id = ?
+            group by pr.source_file_id, pr.search_code
+            """.trimIndent()
+
         val UPDATE_SOURCE_FILE =
             """
             update source_file
@@ -355,13 +412,6 @@ class IngestionService(
                 last_updated_on = ?, stats = ?::jsonb, ingested_at = now()
             where id = ?
             """.trimIndent()
-
-        fun parseDate(value: String): LocalDate? =
-            try {
-                LocalDate.parse(value)
-            } catch (_: DateTimeParseException) {
-                null
-            }
     }
 }
 

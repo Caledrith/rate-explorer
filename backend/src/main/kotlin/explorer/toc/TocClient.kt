@@ -10,6 +10,12 @@ class IndexFormatException(
     cause: Throwable,
 ) : RuntimeException(message, cause)
 
+/** The index could not be fetched at all, so there is no rate file to look for. */
+class IndexUnavailableException(
+    message: String,
+    cause: Throwable,
+) : RuntimeException(message, cause)
+
 /** Downloads and parses the index file. It is small (tens of kilobytes), so it is read whole. */
 class TocClient(
     private val fetcher: Fetcher,

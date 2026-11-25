@@ -102,7 +102,8 @@ create table price_record (
     additional_information text,
     search_code            text    not null,
     match_kind             text    not null check (match_kind in ('billing_code', 'additional_information')),
-    -- json, not jsonb: the detail view shows the record exactly as the file wrote it, key order included.
+    -- json, not jsonb: the detail view shows the record as the file wrote it, with the same
+    -- key order and the same number text (539.40 stays 539.40). Only whitespace differs.
     raw                    json    not null
 );
 
@@ -114,23 +115,20 @@ create index price_record_item_idx on price_record (billing_item_id);
 create index billing_item_source_idx on billing_item (source_file_id);
 create index plan_source_idx on plan (source_file_id);
 
--- Every code that can be searched, refreshed at the end of each load.
+-- Every code that can be searched in a file, built at the end of each load.
 -- code_type, name and description exist only when the file has an item filed under the code itself.
-create materialized view code_catalog as
-select pr.source_file_id,
-       pr.search_code                                                        as code,
-       min(bi.billing_code_type) filter (where pr.match_kind = 'billing_code') as code_type,
-       min(bi.name)
-           filter (where pr.match_kind = 'billing_code' and upper(bi.billing_code_type) <> 'RC')
-                                                                             as name,
-       min(bi.description)
-           filter (where pr.match_kind = 'billing_code' and upper(bi.billing_code_type) <> 'RC')
-                                                                             as description,
-       count(distinct pg.tin)                                                as provider_count
-from price_record pr
-         join billing_item bi on bi.id = pr.billing_item_id
-         join provider_group pg
-              on pg.source_file_id = pr.source_file_id and pg.ref_id = pr.provider_ref_id
-group by pr.source_file_id, pr.search_code;
+--
+-- This is a plain table, not a materialized view: REFRESH replaces a view's contents in a
+-- way that snapshots taken earlier cannot see, so a search running while a file reloads
+-- would briefly find no codes at all.
+create table code_catalog (
+    source_file_id bigint not null references source_file on delete cascade,
+    code           text   not null,
+    code_type      text,
+    name           text,
+    description    text,
+    provider_count int    not null,
+    primary key (source_file_id, code)
+);
 
-create unique index code_catalog_code_idx on code_catalog (source_file_id, code text_pattern_ops);
+create index code_catalog_prefix_idx on code_catalog (source_file_id, code text_pattern_ops);

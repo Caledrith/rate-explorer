@@ -3,6 +3,10 @@ package explorer.ingest
 import explorer.Fixtures
 import explorer.TestDatabase
 import explorer.db.Database
+import explorer.search.SearchQuery
+import explorer.search.SearchRepository
+import explorer.search.SearchService
+import explorer.source.SourceFileRepository
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -43,7 +47,7 @@ class IngestionServiceTest {
 
         val state = assertIs<IngestState.Ready>(service.runNow())
 
-        assertEquals(state.sourceFileId, service.activeSourceFileId())
+        assertEquals(Fixtures.rateFileUrl.toString(), service.activeFileUrl())
         assertEquals(1, count("source_file"))
         assertEquals(2, count("plan"))
         // Five groups from provider references plus one written inline on a rate.
@@ -80,13 +84,14 @@ class IngestionServiceTest {
     }
 
     @Test
-    fun `an unreachable index is a fetch failure`() {
+    fun `an unreachable index is an index failure, not a rate-file one`() {
         val missing = workDir.resolve("no-such-index.json").toUri()
 
         val state = assertIs<IngestState.Failed>(IngestionService(TestDatabase.config(missing), database).runNow())
 
-        assertEquals(IngestErrorKind.FETCH, state.kind)
-        assertNull(IngestionService(TestDatabase.config(missing), database).activeSourceFileId())
+        // The rate file was never reached, so this is reported as an index problem.
+        assertEquals(IngestErrorKind.INDEX, state.kind)
+        assertNull(IngestionService(TestDatabase.config(missing), database).activeFileUrl())
     }
 
     @Test
@@ -119,6 +124,82 @@ class IngestionServiceTest {
         assertEquals(0, count("source_file"))
         assertEquals(0, count("price_record"))
         assertEquals(0, count("provider_group"))
+    }
+
+    @Test
+    fun `JSON that is not an in-network file is a parse failure`() {
+        Files.copy(Path.of(Fixtures.indexUrl), workDir.resolve("index.json"))
+        Files.writeString(workDir.resolve("in-network.json"), "[1, 2, 3]")
+
+        val state =
+            assertIs<IngestState.Failed>(IngestionService(TestDatabase.config(workDir.resolve("index.json").toUri()), database).runNow())
+
+        assertEquals(IngestErrorKind.PARSE, state.kind)
+    }
+
+    @Test
+    fun `a search that started before a reload still sees the whole file it started with`() {
+        val index = copyFixturesTo(workDir)
+        val service = IngestionService(TestDatabase.config(index.toUri()), database)
+        assertIs<IngestState.Ready>(service.runNow())
+        val url = checkNotNull(service.activeFileUrl())
+        val repository = SearchRepository(database.jdbi)
+
+        val idDuringSearch =
+            repository.read { db ->
+                // The first query fixes the snapshot this search will read from.
+                val before = checkNotNull(db.sourceFileId(url))
+
+                // A reload replaces every row of the file and commits while the search is open.
+                assertIs<IngestState.Ready>(service.runNow(force = true))
+
+                assertEquals(before, db.sourceFileId(url))
+                assertNotNull(db.codeInfo(before, "99213"), "the code catalog is part of the snapshot too")
+                assertEquals(3, db.totals(before, SearchQuery("99213")).providers)
+                assertEquals(3, db.providerPage(before, SearchQuery("99213")).first.size)
+                before
+            }
+
+        // The next search reads the new copy, which is complete as well.
+        repository.read { db ->
+            val after = checkNotNull(db.sourceFileId(url))
+            assertNotEquals(idDuringSearch, after)
+            assertEquals(3, db.totals(after, SearchQuery("99213")).providers)
+        }
+    }
+
+    @Test
+    fun `searches follow the configured file even when another was loaded more recently`() {
+        val index = copyFixturesTo(workDir)
+        // The index's other reporting structure points at this second, different rate file.
+        Files.writeString(
+            workDir.resolve("other-in-network.json"),
+            """
+            {"provider_references":[{"provider_group_id":1,"provider_groups":[{"npi":[6666666666],"tin":{"type":"ein","value":"55-5555555","business_name":"Zeta Imaging"}}]}],
+             "in_network":[{"billing_code_type":"CPT","billing_code":"70450","name":"CT HEAD","negotiated_rates":[
+               {"provider_references":[1],"negotiated_prices":[{"negotiated_type":"negotiated","negotiated_rate":210.0,"billing_class":"professional"}]}]}]}
+            """.trimIndent(),
+        )
+        val example = TestDatabase.config(index.toUri())
+        val other = example.copy(planNameContains = "Other Plan")
+
+        assertIs<IngestState.Ready>(IngestionService(example, database).runNow())
+        assertIs<IngestState.Ready>(IngestionService(other, database).runNow())
+        assertEquals(2, count("source_file"))
+
+        // Back to the first configuration, as after a restart. Its file is already loaded.
+        val restarted = IngestionService(example, database)
+        val ready = assertIs<IngestState.Ready>(restarted.runNow())
+        val search = SearchService(SearchRepository(database.jdbi), restarted::activeFileUrl)
+
+        assertEquals("in-network.json", SourceFileRepository(database.jdbi).find(ready.sourceFileId)?.fileName)
+        assertEquals(3, search.search(mapOf("code" to "99213")).summary.providers)
+        assertEquals("code_not_in_file", search.search(mapOf("code" to "70450")).noResults?.reason)
+
+        // And the other configuration searches the other file.
+        val otherService = IngestionService(other, database).also { it.runNow() }
+        val otherSearch = SearchService(SearchRepository(database.jdbi), otherService::activeFileUrl)
+        assertEquals(1, otherSearch.search(mapOf("code" to "70450")).summary.providers)
     }
 
     @Test

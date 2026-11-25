@@ -14,18 +14,25 @@ import java.time.LocalDate
  */
 class SearchService(
     private val repository: SearchRepository,
+    /** URL of the rate file to search; null until a load has succeeded. */
+    private val activeFileUrl: () -> String?,
 ) {
+    /** Opens a snapshot on the active file. Everything a request reads goes through one of these. */
+    private fun <T> readActiveFile(block: (db: SearchQueries, sourceFileId: Long) -> T): T {
+        val url = activeFileUrl() ?: throw NotReadyException()
+        return repository.read { db -> block(db, db.sourceFileId(url) ?: throw NotReadyException()) }
+    }
+
     fun search(params: Map<String, String?>): SearchResponse {
         val query = InputNormalizer.parse(params)
-        return repository.read { db -> search(db, query) }
+        return readActiveFile { db, sourceFileId -> search(db, sourceFileId, query) }
     }
 
     private fun search(
         db: SearchQueries,
+        sourceFileId: Long,
         query: SearchQuery,
     ): SearchResponse {
-        val sourceFileId = db.activeSourceFileId() ?: throw NotReadyException()
-
         val codeInfo = db.codeInfo(sourceFileId, query.code)
         if (codeInfo == null) {
             return response(query, null, EMPTY_SUMMARY, emptyList(), emptyList(), 0, codeNotInFile(db, sourceFileId, query.code))
@@ -33,7 +40,15 @@ class SearchService(
 
         val classes = db.classSummaries(sourceFileId, query)
         val totals = db.totals(sourceFileId, query)
-        val summary = Summary(totals.providers, totals.rates, totals.providersWithBothClasses, classes)
+        val summary =
+            Summary(
+                providers = totals.providers,
+                rates = totals.rates,
+                providersWithBothClasses = totals.providersWithBothClasses,
+                distinctSettings = totals.distinctSettings,
+                distinctNegotiatedTypes = totals.distinctNegotiatedTypes,
+                classes = classes,
+            )
         // "vs median" always compares with every provider for the code, not just the filtered ones.
         val baseline =
             if (query.hasProviderFilter) db.classSummaries(sourceFileId, query.copy(npi = null, tin = null)) else classes
@@ -78,20 +93,17 @@ class SearchService(
                 .orEmpty()
                 .filter(Char::isLetterOrDigit)
                 .take(7)
-        return repository.read { db ->
-            val sourceFileId = db.activeSourceFileId() ?: throw NotReadyException()
-            db.codes(sourceFileId, cleaned, (limit ?: 10).coerceIn(1, 50))
-        }
+        return readActiveFile { db, sourceFileId -> db.codes(sourceFileId, cleaned, (limit ?: 10).coerceIn(1, 50)) }
     }
 
     /** [id] is the handle a search result gave for one rate. */
-    fun detail(id: String): RateDetail = repository.read { db -> detail(db, id) }
+    fun detail(id: String): RateDetail = readActiveFile { db, sourceFileId -> detail(db, sourceFileId, id) }
 
     private fun detail(
         db: SearchQueries,
+        sourceFileId: Long,
         id: String,
     ): RateDetail {
-        val sourceFileId = db.activeSourceFileId() ?: throw NotReadyException()
         val priceId = id.substringBefore('-').toLongOrNull()
         val tin = id.substringAfter('-', "")
         if (priceId == null || tin.isEmpty()) throw NotFoundException("That rate does not exist.")
@@ -165,7 +177,7 @@ class SearchService(
                     schemaVersion = source.schemaVersion,
                     lastUpdatedOn = source.lastUpdatedOn,
                 ),
-            raw = Json.api.readTree(price.raw),
+            raw = prettyJson(price.raw),
         )
     }
 
@@ -179,6 +191,7 @@ class SearchService(
             negotiatedType = line.negotiatedType,
             vsMedianPercent = medians[line.billingClass]?.let { percentDifference(line.rate, it) },
             billingClass = line.billingClass,
+            setting = line.setting,
             placeOfService = line.serviceCodes.map { CodeLabel(it, Labels.placeOfService(it)) },
             modifiers = line.modifiers.map { CodeLabel(it, Labels.modifier(it)) },
             filedUnder = FiledUnder(line.matchKind, line.filedType, line.filedCode),
@@ -266,7 +279,7 @@ class SearchService(
     )
 
     companion object {
-        private val EMPTY_SUMMARY = Summary(0, 0, 0, emptyList())
+        private val EMPTY_SUMMARY = Summary(0, 0, 0, 0, 0, emptyList())
         private val NO_END_DATE: LocalDate = LocalDate.of(9999, 12, 31)
         private const val CLOSEST_CODES = 5
         private const val SAMPLE_ITEM_NAMES = 5
@@ -290,6 +303,9 @@ class SearchService(
             tinType: String,
             tin: String,
         ): String = if (tinType == "ein" && tin.length == 9 && tin.all(Char::isDigit)) "${tin.take(2)}-${tin.drop(2)}" else tin
+
+        /** Re-indents stored JSON without touching its content; see [Json.exact]. */
+        fun prettyJson(json: String): String = Json.exact.writerWithDefaultPrettyPrinter().writeValueAsString(Json.exact.readTree(json))
 
         private fun npiList(values: List<Long>) = NpiList(values.size, values.take(NPI_LIST_LIMIT).map(Long::toString))
     }

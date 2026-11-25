@@ -11,10 +11,12 @@ export default function App() {
 
   const file = status.data?.state === 'ready' ? status.data.file : null
   const ready = file !== null
+  // On narrow screens an open rate takes the whole screen; see MatchPanel.
+  const behindPanel = search && selectedRate && ready ? 'max-lg:hidden' : ''
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="border-b border-line bg-surface">
+      <header className={`border-b border-line bg-surface ${behindPanel}`}>
         <div className="flex flex-wrap items-start gap-x-6 gap-y-3 px-4 py-3 md:px-8">
           <a
             href="/"
@@ -22,13 +24,7 @@ export default function App() {
           >
             Rate Explorer
           </a>
-          {/* Re-created whenever the applied search changes, so its fields follow the address bar. */}
-          <SearchForm
-            key={`${search?.code ?? ''}|${search?.npi ?? ''}|${search?.ein ?? ''}`}
-            applied={search}
-            ready={ready}
-            onSubmit={submit}
-          />
+          <SearchForm applied={search} ready={ready} onSubmit={submit} />
           <StatusText state={status.data?.state} unreachable={status.isError} />
         </div>
       </header>
@@ -55,7 +51,11 @@ export default function App() {
         )}
       </main>
 
-      {file && <DataReport file={file} warning={status.data?.warning ?? null} />}
+      {file && (
+        <div className={behindPanel}>
+          <DataReport file={file} warning={status.data?.warning ?? null} />
+        </div>
+      )}
     </div>
   )
 }

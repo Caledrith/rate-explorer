@@ -72,7 +72,7 @@ const detail: RateDetail = {
     schemaVersion: '2.0.0',
     lastUpdatedOn: '2026-01-15',
   },
-  raw: { negotiated_rate: 300, additional_information: '99213' },
+  raw: '{\n  "negotiated_rate" : 300.00,\n  "additional_information" : "99213"\n}',
 }
 
 test('while the rate file loads, progress is shown and search is locked', async () => {
@@ -140,6 +140,8 @@ test('the address bar drives the search, and searching updates it', async () => 
   await user.type(screen.getByLabelText(/Provider NPI/), '1111111111')
   await user.click(screen.getByRole('button', { name: 'Search' }))
   expect(view.location()).toBe('/?code=99214&npi=1111111111')
+  // The form is not rebuilt by the search, so the keyboard stays where it was.
+  expect(screen.getByRole('button', { name: 'Search' })).toHaveFocus()
 })
 
 test('a shared link opens the same rate, and closing it keeps the search', async () => {
@@ -160,6 +162,13 @@ test('a shared link opens the same rate, and closing it keeps the search', async
   expect(panel).toHaveTextContent("1 of this provider's 2 NPIs")
   expect(document.getElementById('rate-5-111111111')).toHaveAttribute('aria-pressed', 'true')
 
-  await userEvent.setup().keyboard('{Escape}')
+  const user = userEvent.setup()
+  // Escape typed in a field belongs to the field and leaves the panel open.
+  await user.click(screen.getByLabelText(/Billing code/))
+  await user.keyboard('{Escape}')
+  expect(view.location()).toBe('/?code=99213&rate=5-111111111')
+
+  await user.click(panel)
+  await user.keyboard('{Escape}')
   expect(view.location()).toBe('/?code=99213')
 })

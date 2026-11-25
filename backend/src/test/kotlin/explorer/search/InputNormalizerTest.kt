@@ -49,7 +49,7 @@ class InputNormalizerTest {
 
     @Test
     fun `every bad field is reported at once`() {
-        val found = errors("code" to "", "npi" to "1", "ein" to "2", "class" to "dental", "sort" to "sideways", "page" to "0")
+        val found = errors("code" to "", "npi" to "1", "ein" to "2", "class" to "9!", "sort" to "sideways", "page" to "0")
         assertEquals(setOf("code", "npi", "ein", "class", "sort", "page"), found.keys)
     }
 

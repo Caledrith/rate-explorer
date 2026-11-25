@@ -46,10 +46,11 @@ class RealFileCheckTest {
                     // Shared with the app so the download is reused between runs.
                     cacheDir = Path.of("data/cache"),
                 )
-            val state = IngestionService(config, database).runNow()
+            val ingestion = IngestionService(config, database)
+            val state = ingestion.runNow()
             check(state is IngestState.Ready) { "The real file did not load: $state" }
             file = checkNotNull(SourceFileRepository(database.jdbi).find(state.sourceFileId))
-            search = SearchService(SearchRepository(database.jdbi))
+            search = SearchService(SearchRepository(database.jdbi), ingestion::activeFileUrl)
         }
 
         @JvmStatic

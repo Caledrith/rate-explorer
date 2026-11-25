@@ -1,6 +1,5 @@
 package explorer.search
 
-import com.fasterxml.jackson.databind.JsonNode
 import java.math.BigDecimal
 import java.time.LocalDate
 
@@ -72,6 +71,9 @@ data class Summary(
     val providers: Int,
     val rates: Int,
     val providersWithBothClasses: Int,
+    /** How many different settings and negotiated types the rates have. The list shows them only when they vary. */
+    val distinctSettings: Int,
+    val distinctNegotiatedTypes: Int,
     val classes: List<ClassSummary>,
 )
 
@@ -106,6 +108,8 @@ data class RateLine(
     /** Whole-percent difference from the code-wide median of the same billing class. */
     val vsMedianPercent: Int?,
     val billingClass: String,
+    /** inpatient, outpatient or both, as the file states it. */
+    val setting: String?,
     val placeOfService: List<CodeLabel>,
     val modifiers: List<CodeLabel>,
     val filedUnder: FiledUnder,
@@ -176,7 +180,8 @@ data class RateDetail(
     val npis: NpiList,
     val otherNpis: NpiList,
     val source: SourceRef,
-    val raw: JsonNode,
+    /** The price record as the file wrote it, indented for reading. */
+    val raw: String,
 )
 
 data class ProviderRef(

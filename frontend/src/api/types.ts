@@ -77,6 +77,8 @@ export interface RateLine {
   negotiatedType: string | null
   vsMedianPercent: number | null
   billingClass: BillingClass
+  /** inpatient, outpatient or both, as the file states it. */
+  setting: string | null
   placeOfService: CodeLabel[]
   modifiers: CodeLabel[]
   filedUnder: FiledUnder
@@ -128,6 +130,9 @@ export interface SearchResponse {
     providers: number
     rates: number
     providersWithBothClasses: number
+    /** How many different settings and negotiated types the rates have; shown per rate only when above one. */
+    distinctSettings: number
+    distinctNegotiatedTypes: number
     classes: ClassSummary[]
   }
   baseline: ClassSummary[]
@@ -190,7 +195,8 @@ export interface RateDetail {
     schemaVersion: string | null
     lastUpdatedOn: string | null
   }
-  raw: Record<string, unknown>
+  /** The price record as the file wrote it, already indented. Kept as text so numbers are not reformatted. */
+  raw: string
 }
 
 // ---- Errors ----

@@ -97,7 +97,7 @@ class ApiTest {
 
             val detail = client.get("/api/rates/$id").json()
             assertEquals("Alpha Clinic", detail["provider"]["name"].asText())
-            assertEquals("negotiated", detail["raw"]["negotiated_type"].asText())
+            assertEquals("negotiated", Json.api.readTree(detail["raw"].asText())["negotiated_type"].asText())
 
             assertEquals(HttpStatusCode.NotFound, client.get("/api/rates/nope").status)
         }

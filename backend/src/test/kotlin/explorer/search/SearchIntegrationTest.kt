@@ -6,6 +6,7 @@ import explorer.api.NotFoundException
 import explorer.db.Database
 import explorer.ingest.IngestState
 import explorer.ingest.IngestionService
+import explorer.json.Json
 import explorer.source.SourceFileRepository
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
@@ -36,7 +37,7 @@ class SearchIntegrationTest {
             val state = ingestion.runNow()
             check(state is IngestState.Ready) { "Fixture did not load: $state" }
             sourceFiles = SourceFileRepository(database.jdbi)
-            search = SearchService(SearchRepository(database.jdbi))
+            search = SearchService(SearchRepository(database.jdbi), ingestion::activeFileUrl)
         }
 
         @JvmStatic
@@ -288,11 +289,44 @@ class SearchIntegrationTest {
                 "additional_information",
                 "setting",
             ),
-            detail.raw
+            Json.api
+                .readTree(detail.raw)
                 .fieldNames()
                 .asSequence()
                 .toList(),
         )
+    }
+
+    @Test
+    fun `the raw record keeps the number text the file used`() {
+        val facility = search("code" to "99213").providers.first().rates[2]
+
+        // The fixture writes 300.0; a round trip through doubles could print 300 or 3.0E2.
+        assertTrue(search.detail(facility.id).raw.contains("\"negotiated_rate\" : 300.0"))
+    }
+
+    @Test
+    fun `settings and negotiated types are counted so the list can show them only when they vary`() {
+        val result = search("code" to "99213")
+
+        assertEquals(1, result.summary.distinctSettings)
+        assertEquals(1, result.summary.distinctNegotiatedTypes)
+        assertEquals(
+            "outpatient",
+            result.providers
+                .first()
+                .rates
+                .first()
+                .setting,
+        )
+    }
+
+    @Test
+    fun `a class the file does not use is an empty result, not an error`() {
+        val result = search("code" to "99213", "class" to "unspecified")
+
+        assertEquals("no_rates_in_class", result.noResults?.reason)
+        assertEquals(3, result.summary.providers)
     }
 
     @Test

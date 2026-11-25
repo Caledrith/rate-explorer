@@ -16,6 +16,7 @@ data class LineRow(
     val rate: BigDecimal,
     val negotiatedType: String?,
     val billingClass: String,
+    val setting: String?,
     val serviceCodes: List<String>,
     val modifiers: List<String>,
     val matchKind: String,
@@ -40,6 +41,8 @@ data class Totals(
     val providers: Int,
     val rates: Int,
     val providersWithBothClasses: Int,
+    val distinctSettings: Int,
+    val distinctNegotiatedTypes: Int,
 )
 
 /** The stored price a rate line points at, joined to its item. */
@@ -95,10 +98,14 @@ class SearchRepository(
 class SearchQueries(
     private val handle: Handle,
 ) {
-    /** The file searches read: the most recently loaded one. Null until a load has finished. */
-    fun activeSourceFileId(): Long? =
+    /**
+     * Row id of the rate file with this URL, or null if it is not loaded. Read inside the
+     * snapshot, so a reload that swaps the file's rows cannot be seen half way.
+     */
+    fun sourceFileId(fileUrl: String): Long? =
         handle
-            .createQuery("select id from source_file order by ingested_at desc, id desc limit 1")
+            .createQuery("select id from source_file where file_url = :url")
+            .bind("url", fileUrl)
             .mapTo(Long::class.javaObjectType)
             .findOne()
             .orElse(null)
@@ -148,11 +155,20 @@ class SearchQueries(
                 select (select count(distinct tin) from lines) as providers,
                        (select count(*) from lines)            as rates,
                        (select count(*)
-                        from (select tin from lines group by tin having count(distinct billing_class) > 1) two_classes) as both_classes
+                        from (select tin from lines group by tin having count(distinct billing_class) > 1) two_classes) as both_classes,
+                       (select count(distinct coalesce(setting, '')) from lines)         as settings,
+                       (select count(distinct coalesce(negotiated_type, '')) from lines) as negotiated_types
                 """.trimIndent(),
             ).bindSearch(sourceFileId, query)
-            .map { rows, _ -> Totals(rows.getInt("providers"), rows.getInt("rates"), rows.getInt("both_classes")) }
-            .one()
+            .map { rows, _ ->
+                Totals(
+                    providers = rows.getInt("providers"),
+                    rates = rows.getInt("rates"),
+                    providersWithBothClasses = rows.getInt("both_classes"),
+                    distinctSettings = rows.getInt("settings"),
+                    distinctNegotiatedTypes = rows.getInt("negotiated_types"),
+                )
+            }.one()
 
     /** One page of providers in the requested order, plus how many providers match in total. */
     fun providerPage(
@@ -231,16 +247,14 @@ class SearchQueries(
                     where pr.source_file_id = :sf and pr.search_code = :code and pg.tin = any(:tins)
                 ),
                 line_rows as (
-                    select m.tin, m.negotiated_rate, m.negotiated_type, m.billing_class, m.setting,
-                           m.service_codes, m.modifiers, m.match_kind, m.filed_type, m.filed_code,
+                    select ${lineKey("m.")},
                            min(m.price_id)                                               as first_price_id,
                            count(distinct (m.billing_item_id, m.rate_index, m.price_index)) as occurrences,
                            count(distinct n.npi)                                         as npi_count,
                            ${if (npi != null) "coalesce(bool_or(n.npi = :npi), false)" else "true"} as applies_to_npi
                     from matched m
                     left join provider_group_npi n on n.provider_group_id = m.group_id
-                    group by m.tin, m.negotiated_rate, m.negotiated_type, m.billing_class, m.setting,
-                             m.service_codes, m.modifiers, m.match_kind, m.filed_type, m.filed_code
+                    group by ${lineKey("m.")}
                 ),
                 provider_npis as (
                     select m.tin, count(distinct n.npi) as npi_count
@@ -263,6 +277,7 @@ class SearchQueries(
                     rate = rows.getBigDecimal("negotiated_rate"),
                     negotiatedType = rows.getString("negotiated_type"),
                     billingClass = rows.getString("billing_class"),
+                    setting = rows.getString("setting"),
                     serviceCodes = rows.strings("service_codes"),
                     modifiers = rows.strings("modifiers"),
                     matchKind = rows.getString("match_kind"),
@@ -512,6 +527,27 @@ class SearchQueries(
     private companion object {
         const val CODE_SELECT = "select code, code_type, name, description, provider_count from code_catalog"
 
+        /**
+         * What makes two rows "the same rate for the same provider". Everything a reader
+         * could tell two rates apart by is in the key; the file position is not. The
+         * occurrences query below matches on the same columns.
+         */
+        private val LINE_KEY =
+            listOf(
+                "tin",
+                "negotiated_rate",
+                "negotiated_type",
+                "billing_class",
+                "setting",
+                "service_codes",
+                "modifiers",
+                "match_kind",
+                "filed_type",
+                "filed_code",
+            )
+
+        fun lineKey(prefix: String = ""): String = LINE_KEY.joinToString(", ") { prefix + it }
+
         /** One row per price per provider group it applies to. */
         const val MATCHED_SELECT = """
             select pr.id as price_id, pr.billing_item_id, pr.rate_index, pr.price_index,
@@ -540,11 +576,9 @@ class SearchQueries(
             }
             ),
             lines as (
-                select tin, negotiated_rate, negotiated_type, billing_class, setting, service_codes, modifiers,
-                       match_kind, filed_type, filed_code
+                select ${lineKey()}
                 from matched
-                group by tin, negotiated_rate, negotiated_type, billing_class, setting, service_codes, modifiers,
-                         match_kind, filed_type, filed_code
+                group by ${lineKey()}
             )
             """.trimIndent()
 

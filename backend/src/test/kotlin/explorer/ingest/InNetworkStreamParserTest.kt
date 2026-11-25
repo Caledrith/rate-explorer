@@ -68,8 +68,19 @@ class InNetworkStreamParserTest {
     }
 
     @Test
+    fun `decimals keep the text the file used`() {
+        val recorder = Recorder()
+        InNetworkStreamParser().parse(
+            """{"in_network":[{"negotiated_rates":[{"negotiated_prices":[{"negotiated_rate":539.40}]}]}]}""".byteInputStream(),
+            recorder,
+        )
+        val price = recorder.items.single().second["negotiated_rates"][0]["negotiated_prices"][0]
+        assertEquals("""{"negotiated_rate":539.40}""", price.toString())
+    }
+
+    @Test
     fun `a document that is not an object is rejected`() {
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<RateFileFormatException> {
             InNetworkStreamParser().parse("[1, 2, 3]".byteInputStream(), Recorder())
         }
     }
