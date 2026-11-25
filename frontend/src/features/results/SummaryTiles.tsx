@@ -27,9 +27,12 @@ export function SummaryTiles({ result, onSelectClass }: Props) {
     <div
       role="group"
       aria-label="Show rates"
-      className="grid grid-cols-3 gap-1.5 md:grid-cols-[15rem_1fr_1fr] md:gap-2.5"
+      // Three across needs about 375px for "Institutional" to fit its tile. Narrower
+      // phones get two rows: all rates on top, the two billing classes side by side below.
+      className="grid grid-cols-2 gap-1.5 min-[375px]:grid-cols-3 md:gap-2.5 lg:grid-cols-[15rem_1fr_1fr]"
     >
       <Tile
+        className="col-span-2 min-[375px]:col-span-1"
         selected={query.billingClass === null}
         onClick={() => onSelectClass(null)}
         hint={
@@ -86,16 +89,17 @@ function ClassTile({
         </span>
       </span>
       {!empty && (
-        <span className="flex flex-col gap-0.5 tabular-nums md:text-right">
+        <span className="flex flex-col gap-0.5 tabular-nums lg:text-right">
           <span>
             <span className="text-meta text-muted">
               {filtered ? 'Median, all providers' : 'Median'}
             </span>{' '}
-            <span className="text-meta font-bold md:text-lead">
+            {/* On its own line in the narrow tiles, so a longer figure cannot wrap one tile and not the other. */}
+            <span className="block text-meta font-bold lg:inline lg:text-lead">
               {formatMoney(reference.median)}
             </span>
           </span>
-          <span className="hidden text-meta text-muted md:inline">
+          <span className="hidden text-meta text-muted lg:inline">
             {formatMoney(reference.min)} to {formatMoney(reference.max)}
           </span>
         </span>
@@ -110,8 +114,11 @@ function Tile({
   wide = false,
   onClick,
   hint,
+  className,
   children,
 }: {
+  /** Grid placement of the tile. */
+  className?: string
   selected: boolean
   disabled?: boolean
   wide?: boolean
@@ -121,7 +128,7 @@ function Tile({
   children: ReactNode
 }) {
   return (
-    <div className="relative min-w-0">
+    <div className={cx('relative min-w-0', className)}>
       <button
         type="button"
         aria-pressed={selected}
@@ -129,7 +136,8 @@ function Tile({
         onClick={onClick}
         className={cx(
           'flex h-full w-full flex-col gap-0.5 rounded-xl border px-2.5 py-2 text-left md:px-3.5 md:py-2.5',
-          wide && 'md:flex-row md:items-center md:justify-between md:gap-4',
+          // Side by side only where the tile is wide enough to hold both halves on a line.
+          wide && 'lg:flex-row lg:items-center lg:justify-between lg:gap-4',
           selected
             ? 'border-accent bg-accent-soft'
             : disabled

@@ -36,15 +36,15 @@ test('the open rate highlights its whole provider row, and only that row', () =>
   expect(row('Alpha Clinic')).not.toHaveClass('bg-accent-soft')
   expect(document.getElementById('rate-g1')).toHaveAttribute('aria-pressed', 'true')
   // With a single rate, the row is the highlight; the line inside is not boxed again.
-  expect(document.getElementById('rate-g1')).not.toHaveClass('md:border-accent')
+  expect(document.getElementById('rate-g1')).not.toHaveClass('lg:border-accent')
 })
 
 test('when a provider has several rates, the open one is outlined inside the highlighted row', () => {
   const { row } = renderList('a2')
 
   expect(row('Alpha Clinic')).toHaveClass('bg-accent-soft')
-  expect(document.getElementById('rate-a2')).toHaveClass('md:border-accent')
-  expect(document.getElementById('rate-a1')).not.toHaveClass('md:border-accent')
+  expect(document.getElementById('rate-a2')).toHaveClass('lg:border-accent')
+  expect(document.getElementById('rate-a1')).not.toHaveClass('lg:border-accent')
   expect(document.getElementById('rate-a1')).toHaveAttribute('aria-pressed', 'false')
 })
 

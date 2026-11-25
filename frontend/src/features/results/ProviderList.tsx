@@ -6,7 +6,7 @@ import { RateLine } from './RateLine.tsx'
 import { filedUnderNote, VS_MEDIAN_NOTE } from './notes.ts'
 import { RATE_COLUMNS } from './rateText.ts'
 
-const PROVIDER_COLUMNS = 'md:grid md:grid-cols-[12rem_minmax(0,1fr)] md:gap-3'
+const PROVIDER_COLUMNS = 'lg:grid lg:grid-cols-[12rem_minmax(0,1fr)] lg:gap-3'
 
 interface Props {
   providers: ProviderResult[]
@@ -31,7 +31,7 @@ export function ProviderList({
   code,
 }: Props) {
   return (
-    <div className="md:rounded-xl md:border md:border-line md:bg-surface">
+    <div className="lg:rounded-xl lg:border lg:border-line lg:bg-surface">
       {/* The headings sit outside the clipped list so their notes can open over the rows. */}
       <div className={cx('hidden px-4 py-2 text-meta font-semibold text-muted', PROVIDER_COLUMNS)}>
         <span>Provider</span>
@@ -52,31 +52,31 @@ export function ProviderList({
         </span>
       </div>
       {/* Bottom corners use the card's radius measured inside its 1px border. */}
-      <ul className="flex flex-col gap-2.5 md:gap-0 md:overflow-hidden md:rounded-b-[calc(var(--radius-xl)-1px)]">
+      <ul className="flex flex-col gap-2.5 lg:gap-0 lg:overflow-hidden lg:rounded-b-[calc(var(--radius-xl)-1px)]">
         {providers.map((provider) => (
           <li
             key={provider.tin}
             className={cx(
               'list-none rounded-xl border px-3 pt-3 pb-0.5',
-              'md:items-start md:rounded-none md:border-0 md:border-t md:border-line-soft md:px-4 md:py-2',
+              'lg:items-start lg:rounded-none lg:border-0 lg:border-t lg:border-line-soft lg:px-4 lg:py-2',
               // The last row takes the card's bottom corners, so its highlight outline
               // follows the curve instead of being cut off square by the clipped list.
-              'md:last:rounded-b-[calc(var(--radius-xl)-1px)]',
+              'lg:last:rounded-b-[calc(var(--radius-xl)-1px)]',
               // The open rate lights up its whole provider row, name included.
               hasRate(provider, selectedRate)
-                ? 'border-accent bg-accent-soft md:ring-1 md:ring-accent md:ring-inset'
+                ? 'border-accent bg-accent-soft lg:ring-1 lg:ring-accent lg:ring-inset'
                 : 'border-line bg-surface',
               PROVIDER_COLUMNS,
             )}
           >
-            <div className="min-w-0 pb-2 md:pt-1.5 md:pb-0">
+            <div className="min-w-0 pb-2 lg:pt-1.5 lg:pb-0">
               <h2 className="font-semibold break-words">{provider.name}</h2>
               <p className="text-meta text-muted tabular-nums">
                 {provider.tinType === 'ein' ? 'EIN' : 'Tax ID'} {provider.tinDisplay} ·{' '}
                 <NpiSummary provider={provider} />
               </p>
             </div>
-            <div className="flex flex-col md:gap-0.5">
+            <div className="flex flex-col lg:gap-0.5">
               {provider.rates.map((rate) => (
                 <RateLine
                   key={rate.id}
@@ -91,7 +91,7 @@ export function ProviderList({
                 />
               ))}
               {provider.hiddenRateCount > 0 && (
-                <p className="border-t border-line-soft py-2 text-meta text-muted md:border-0 md:px-2 md:pt-0.5 md:pb-1">
+                <p className="border-t border-line-soft py-2 text-meta text-muted lg:border-0 lg:px-2 lg:pt-0.5 lg:pb-1">
                   {provider.hiddenRateCount === 1
                     ? "1 more rate applies only to this provider's other NPIs."
                     : `${provider.hiddenRateCount} more rates apply only to this provider's other NPIs.`}

@@ -12,7 +12,7 @@ export default function App() {
   const file = status.data?.state === 'ready' ? status.data.file : null
   const ready = file !== null
   // On narrow screens an open rate takes the whole screen; see MatchPanel.
-  const behindPanel = search && selectedRate && ready ? 'max-lg:hidden' : ''
+  const behindPanel = search && selectedRate && ready ? 'max-xl:hidden' : ''
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -77,7 +77,9 @@ function StatusText({
   return (
     <span
       role="status"
-      className={`order-2 ml-auto text-meta md:order-3 md:mt-[1.875rem] ${bad ? 'font-semibold text-danger' : 'text-muted'}`}
+      // Between md and lg the search form fills the row. "File loaded" is the unremarkable
+      // case, so it steps aside there instead of taking a row of its own.
+      className={`order-2 ml-auto text-meta md:order-3 md:mt-[1.875rem] ${bad ? 'font-semibold text-danger' : 'text-muted'} ${state === 'ready' ? 'md:max-lg:hidden' : ''}`}
     >
       {text}
     </span>

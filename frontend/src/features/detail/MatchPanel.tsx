@@ -18,7 +18,7 @@ interface Props {
  * "Why this matched": traces one rate back to the exact record in the source file.
  *
  * On wide screens it is a column beside the list. On narrow ones the rest of the page is
- * hidden while it is open (see `max-lg:hidden` in App and ResultsView), so it is the only
+ * hidden while it is open (see `max-xl:hidden` in App and ResultsView), so it is the only
  * thing on screen and the only thing in the tab order, with no focus trap to maintain.
  * Opening it moves focus to its heading; Escape or the close button returns focus to the rate.
  */
@@ -57,17 +57,17 @@ export function MatchPanel({ id, searchedNpi, onClose }: Props) {
       aria-labelledby="match-panel-title"
       className={cx(
         'flex flex-col bg-surface',
-        'max-lg:-mx-4 max-lg:-my-5 max-lg:min-h-dvh md:max-lg:-mx-8',
-        'lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto lg:rounded-xl lg:border lg:border-line-strong',
+        'max-xl:-mx-4 max-xl:-my-5 max-xl:min-h-dvh md:max-xl:-mx-8',
+        'xl:sticky xl:top-4 xl:max-h-[calc(100dvh-2rem)] xl:overflow-y-auto xl:rounded-xl xl:border xl:border-line-strong',
       )}
     >
-      <div className="sticky top-0 flex items-center gap-3 border-b border-line bg-surface px-4 py-2.5 lg:justify-between lg:px-5">
-        <Button size="sm" className="lg:order-2" onClick={close}>
-          <span aria-hidden="true" className="lg:hidden">
+      <div className="sticky top-0 flex items-center gap-3 border-b border-line bg-surface px-4 py-2.5 xl:justify-between xl:px-5">
+        <Button size="sm" className="xl:order-2" onClick={close}>
+          <span aria-hidden="true" className="xl:hidden">
             ‹{' '}
           </span>
-          <span className="lg:hidden">Results</span>
-          <span className="hidden lg:inline">Close</span>
+          <span className="xl:hidden">Results</span>
+          <span className="hidden xl:inline">Close</span>
         </Button>
         <h2
           id="match-panel-title"
@@ -79,7 +79,7 @@ export function MatchPanel({ id, searchedNpi, onClose }: Props) {
         </h2>
       </div>
 
-      <div className="flex flex-col gap-5 p-4 lg:p-5">
+      <div className="flex flex-col gap-5 p-4 xl:p-5">
         {isPending && (
           <div role="status" className="flex animate-appear flex-col gap-3 *:animate-pulse">
             <div className="h-9 w-32 rounded bg-line-soft" />

@@ -45,7 +45,7 @@ export function ResultsView({
   const filedAs = `${result.code?.type ? `${codeTypeName(result.code.type)} ` : ''}${result.query.code}`
 
   // On narrow screens an open rate takes the whole screen, so everything else steps aside.
-  const behindPanel = selectedRate ? 'max-lg:hidden' : undefined
+  const behindPanel = selectedRate ? 'max-xl:hidden' : undefined
 
   return (
     <div className="relative" aria-busy={loadingNext}>
@@ -115,8 +115,8 @@ export function ResultsView({
                     from.
                   </p>
                 )}
-                {/* Wide screens put these notes on the column headings; phones have no headings. */}
-                <span className="md:hidden">
+                {/* The table puts these notes on its column headings; the cards have no headings. */}
+                <span className="lg:hidden">
                   <Hint label="How to read this list">
                     <span className="flex flex-col gap-2">
                       <span>{VS_MEDIAN_NOTE}</span>
@@ -143,7 +143,7 @@ export function ResultsView({
             <div
               className={cx(
                 'grid items-start gap-5',
-                selectedRate && 'lg:grid-cols-[minmax(0,1fr)_25rem]',
+                selectedRate && 'xl:grid-cols-[minmax(0,1fr)_25rem]',
               )}
             >
               <div className={cx('flex min-w-0 flex-col gap-3', behindPanel)}>
@@ -180,18 +180,30 @@ export function ResultsView({
 function ResultHeading({ result }: { result: SearchResponse }) {
   const { code, query, summary } = result
   const description = code?.description && code.description !== code.name ? code.description : null
+  // Split off the last word of the name, so the description's "?" can be kept beside it.
+  const name = code?.name ? sentenceCase(code.name) : ''
+  const lastSpace = name.lastIndexOf(' ')
+  const nameStart = name.slice(0, lastSpace + 1)
+  const nameEnd = name.slice(lastSpace + 1)
   return (
     <header className="flex flex-col gap-1">
       <h1 className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-title font-bold">
         <span>{query.code}</span>
         {code?.type && <Chip>{codeTypeName(code.type)}</Chip>}
-        {code?.name && <span className="font-medium">{sentenceCase(code.name)}</span>}
+        {name && !description && <span className="font-medium">{name}</span>}
         {description && (
-          <Hint label="The file's description of this code">
-            {sentenceCase(description)}
-            {/* The file cuts descriptions at 100 characters. */}
-            {description.length >= 100 && '… (the file cuts the description off here)'}
-          </Hint>
+          <span className="font-medium">
+            {nameStart}
+            {/* The "?" wraps together with the last word, never onto a line by itself. */}
+            <span className="whitespace-nowrap">
+              {nameEnd}{' '}
+              <Hint label="The file's description of this code">
+                {sentenceCase(description)}
+                {/* The file cuts descriptions at 100 characters. */}
+                {description.length >= 100 && '… (the file cuts the description off here)'}
+              </Hint>
+            </span>
+          </span>
         )}
       </h1>
       {summary.providers > 0 && (

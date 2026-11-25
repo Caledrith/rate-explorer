@@ -106,3 +106,20 @@ test('at phone width the search collapses and the detail takes the screen', asyn
   // Nothing scrolls sideways.
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
 })
+
+test('an open rate sits beside the list only where the list still has room', async ({ page }) => {
+  // Wide enough for the table, but not for the table and the panel side by side.
+  await page.setViewportSize({ width: 1100, height: 800 })
+  await searchFor(page, { code: '99213' })
+  await page.getByRole('listitem').filter({ hasText: 'Gamma Health' }).getByRole('button').click()
+
+  const panel = page.getByRole('complementary', { name: 'Why this matched' })
+  await expect(panel).toBeVisible()
+  // The panel takes the screen; squeezing the list in beside it left its columns unreadable.
+  await expect(page.getByRole('heading', { name: 'Gamma Health' })).toBeHidden()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1100)
+
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await expect(panel).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Gamma Health' })).toBeVisible()
+})

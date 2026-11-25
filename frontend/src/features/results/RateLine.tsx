@@ -2,7 +2,13 @@ import type { RateLine as Rate } from '../../api/types.ts'
 import { Chip } from '../../components/ui.tsx'
 import { cx } from '../../lib/cx.ts'
 import { codeTypeName, formatRate, formatVsMedian } from '../../lib/format.ts'
-import { RATE_COLUMNS, modifierCodes, placeOfServiceText, rateElementId } from './rateText.ts'
+import {
+  RATE_COLUMNS,
+  modifierCodes,
+  npiCoverageText,
+  placeOfServiceText,
+  rateElementId,
+} from './rateText.ts'
 
 interface Props {
   rate: Rate
@@ -42,6 +48,8 @@ export function RateLine({
     // Codes only: what each modifier means is in the detail panel, not repeated on every row.
     modifierCodes(rate.modifiers),
     showNegotiatedType && rate.negotiatedType && `${rate.negotiatedType} rate`,
+    // Says so when the rate covers only some of the provider's NPIs.
+    npiCoverageText(rate.npiCount, providerNpiCount),
   ]
     .filter(Boolean)
     .join(' · ')
@@ -54,19 +62,22 @@ export function RateLine({
       onClick={() => onSelect(rate.id)}
       className={cx(
         'grid w-full grid-cols-[5.5rem_minmax(0,1fr)_1rem] items-start gap-x-3 border-t border-line-soft py-2.5 text-left',
-        'md:items-center md:rounded-md md:border md:px-2 md:py-1.5',
+        'lg:items-center lg:rounded-md lg:border lg:px-2 lg:py-1.5',
         RATE_COLUMNS,
         // The highlight belongs to the whole provider row. Inside it, the open rate is
         // outlined only when the provider has other rates to tell it apart from.
-        selected && !onlyRate
-          ? 'md:border-accent md:bg-surface'
+        // The open rate itself has no hover state: selecting it again changes nothing.
+        selected
+          ? onlyRate
+            ? 'lg:border-transparent'
+            : 'lg:border-accent lg:bg-surface'
           : rowSelected
-            ? 'md:border-transparent md:hover:bg-surface/60'
-            : 'md:border-transparent md:hover:bg-ground',
+            ? 'lg:border-transparent lg:hover:bg-surface/60'
+            : 'lg:border-transparent lg:hover:bg-ground',
       )}
     >
-      <span className="flex flex-col md:contents">
-        <span className="text-lead font-bold tabular-nums md:text-right">
+      <span className="flex flex-col lg:contents">
+        <span className="text-lead font-bold tabular-nums lg:text-right">
           {formatRate(rate.rate, rate.negotiatedType)}
         </span>
         {vsMedian ? (
@@ -74,19 +85,16 @@ export function RateLine({
             className={cx('text-meta tabular-nums', vsMedian.notable ? 'font-bold' : 'text-muted')}
           >
             {vsMedian.text}
-            {rate.vsMedianPercent !== 0 && <span className="md:hidden"> vs median</span>}
+            {rate.vsMedianPercent !== 0 && <span className="lg:hidden"> vs median</span>}
           </span>
         ) : (
           <span />
         )}
       </span>
 
-      <span className="flex min-w-0 flex-col items-start gap-1 md:contents">
+      <span className="flex min-w-0 flex-col items-start gap-1 lg:contents">
         <span className="min-w-0">
-          <span className="block">
-            {placeOfServiceText(rate.placeOfService)}
-            <NpiCoverage covered={rate.npiCount} of={providerNpiCount} />
-          </span>
+          <span className="block">{placeOfServiceText(rate.placeOfService)}</span>
           <span className="block text-meta text-muted">{detail}</span>
         </span>
         <span>
@@ -105,16 +113,5 @@ export function RateLine({
         ›
       </span>
     </button>
-  )
-}
-
-/** Says so when a rate covers only some of the provider's NPIs, or none the file could name. */
-function NpiCoverage({ covered, of }: { covered: number; of: number }) {
-  if (covered >= of) return null
-  return (
-    <span className="text-meta whitespace-nowrap text-muted">
-      {' '}
-      · {covered === 0 ? 'no NPI listed' : `${covered} of ${of} NPIs`}
-    </span>
   )
 }

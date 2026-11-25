@@ -101,7 +101,7 @@ export function SearchForm({ applied, ready, onSubmit }: Props) {
           value={draft.code}
           error={errors.code}
           onChange={(value) => change('code', value)}
-          className="md:w-40"
+          className="md:w-36 lg:w-40"
           inputClassName="font-bold"
           list={listId}
           required
@@ -119,7 +119,7 @@ export function SearchForm({ applied, ready, onSubmit }: Props) {
           error={errors.npi}
           onChange={(value) => change('npi', value)}
           placeholder="10 digits"
-          className="md:w-40"
+          className="md:w-36 lg:w-40"
           inputMode="numeric"
         />
         <Field
@@ -129,7 +129,7 @@ export function SearchForm({ applied, ready, onSubmit }: Props) {
           error={errors.ein}
           onChange={(value) => change('ein', value)}
           placeholder="12-3456789"
-          className="md:w-40"
+          className="md:w-36 lg:w-40"
           inputMode="numeric"
         />
         <div className="flex flex-col gap-2 md:mt-[1.4375rem] md:flex-row">
