@@ -140,8 +140,11 @@ class SearchIntegrationTest {
     fun `codes become words with the code kept beside them`() {
         val telehealth = search("code" to "99213").providers.first().rates[1]
 
-        assertEquals(listOf(CodeLabel("02", "Telehealth"), CodeLabel("10", "Telehealth at home")), telehealth.placeOfService)
-        assertEquals(listOf(CodeLabel("25", "separate same-day visit"), CodeLabel("95", "live video")), telehealth.modifiers)
+        assertEquals(listOf(CodeLabel("02", "Telehealth, not at home"), CodeLabel("10", "Telehealth at home")), telehealth.placeOfService)
+        assertEquals(
+            listOf(CodeLabel("25", "separate E/M, same day"), CodeLabel("95", "real-time audio and video")),
+            telehealth.modifiers,
+        )
     }
 
     @Test

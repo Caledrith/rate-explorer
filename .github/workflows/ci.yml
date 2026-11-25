@@ -43,3 +43,27 @@ jobs:
       - run: npm run format:check
       - run: npm test
       - run: npm run build
+
+  # Builds the Docker images and drives the whole stack in a browser, loading the small
+  # fixture file. This is the check that "docker compose up" works for a reviewer.
+  e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e:up
+      - run: npm run e2e
+      - name: Show container logs if the run failed
+        if: failure()
+        run: docker compose -p rate-explorer-e2e -f ../docker-compose.yml -f ../docker-compose.e2e.yml logs --tail 200
+      - run: npm run e2e:down
+        if: always()

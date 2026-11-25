@@ -108,6 +108,12 @@ create table price_record (
 
 create index price_record_search_idx on price_record (source_file_id, search_code);
 
+-- Every foreign key has an index, so replacing a file (a delete that cascades to its
+-- rows) does not scan the big tables once per parent row.
+create index price_record_item_idx on price_record (billing_item_id);
+create index billing_item_source_idx on billing_item (source_file_id);
+create index plan_source_idx on plan (source_file_id);
+
 -- Every code that can be searched, refreshed at the end of each load.
 -- code_type, name and description exist only when the file has an item filed under the code itself.
 create materialized view code_catalog as

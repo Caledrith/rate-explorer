@@ -68,7 +68,7 @@ function ProviderRow({
       )}
     >
       <div className="min-w-0 pb-2 md:pt-1.5 md:pb-0">
-        <h3 className="font-semibold break-words">{provider.name}</h3>
+        <h2 className="font-semibold break-words">{provider.name}</h2>
         <p className="text-meta text-muted tabular-nums">
           {provider.tinType === 'ein' ? 'EIN' : 'Tax ID'} {provider.tinDisplay} ·{' '}
           {plural(provider.npiCount, 'NPI')}

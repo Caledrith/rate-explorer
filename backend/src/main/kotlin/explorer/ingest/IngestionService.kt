@@ -171,6 +171,7 @@ class IngestionService(
                 val loader = BulkLoader(connection, sourceFileId)
 
                 enter(IngestPhase.PARSING, total = Files.size(path))
+                val parseStarted = System.nanoTime()
                 val header =
                     open(path).use { input ->
                         InNetworkStreamParser().parse(
@@ -192,6 +193,8 @@ class IngestionService(
                         )
                     }
                 loader.flush()
+                val indexStarted = System.nanoTime()
+                log.info("Parsed and copied {} prices in {} ms", stats.prices, (indexStarted - parseStarted) / 1_000_000)
 
                 enter(IngestPhase.INDEXING, total = null)
                 connection.update(DERIVE_PROVIDERS, sourceFileId)
@@ -206,6 +209,7 @@ class IngestionService(
                 )
                 connection.createStatement().use { it.execute("refresh materialized view code_catalog") }
                 connection.commit()
+                log.info("Derived providers and the code catalog in {} ms", (System.nanoTime() - indexStarted) / 1_000_000)
                 connection.autoCommit = true
                 connection.createStatement().use { it.execute("analyze") }
                 sourceFileId

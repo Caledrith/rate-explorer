@@ -1,0 +1,11 @@
+# Overlay for end-to-end tests: the same stack, loading the small fixture file instead of
+# the real one, so the run needs no network and takes seconds.
+#
+#   npm --prefix frontend run e2e:up && npm --prefix frontend run e2e
+services:
+  backend:
+    environment:
+      INDEX_URL: file:///fixtures/index.json
+      PLAN_NAME_CONTAINS: Example Care
+    volumes:
+      - ./backend/src/test/resources/fixtures:/fixtures:ro
