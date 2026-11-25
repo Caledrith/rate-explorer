@@ -34,7 +34,7 @@ data class AppConfig(
                 port = value("PORT")?.toIntOrNull() ?: 8080,
                 db =
                     DbConfig(
-                        url = value("DB_URL") ?: "jdbc:postgresql://localhost:5433/rates",
+                        url = value("DB_URL") ?: "jdbc:postgresql://localhost:5544/rates",
                         user = value("DB_USER") ?: "rates",
                         password = value("DB_PASSWORD") ?: "rates",
                     ),

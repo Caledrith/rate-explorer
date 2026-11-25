@@ -11,7 +11,7 @@ class HealthTest {
     @Test
     fun `healthz answers ok`() =
         testApplication {
-            application { module() }
+            application { baseModule() }
             val response = client.get("/healthz")
             assertEquals(HttpStatusCode.OK, response.status)
             assertEquals("ok", response.bodyAsText())

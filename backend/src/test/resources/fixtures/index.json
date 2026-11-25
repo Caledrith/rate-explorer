@@ -1,0 +1,35 @@
+{
+  "reporting_entity_name": "Example Health Plan",
+  "reporting_entity_type": "Health Insurance Issuer",
+  "reporting_structure": [
+    {
+      "reporting_plans": [
+        {
+          "plan_name": "Other Plan Bronze",
+          "plan_id_type": "hios",
+          "plan_id": "00000XX0010001",
+          "plan_market_type": "individual"
+        }
+      ],
+      "in_network_files": [{ "description": "other file", "location": "other-in-network.json" }]
+    },
+    {
+      "reporting_plans": [
+        {
+          "plan_name": "Example Care Silver",
+          "plan_id_type": "hios",
+          "plan_id": "11111XX0020001",
+          "plan_market_type": "individual"
+        },
+        {
+          "plan_name": "Example Care Gold",
+          "plan_id_type": "hios",
+          "plan_id": "11111XX0020002",
+          "plan_market_type": "individual"
+        }
+      ],
+      "in_network_files": [{ "description": "in-network file", "location": "in-network.json" }],
+      "allowed_amount_file": { "description": "allowed amounts", "location": "allowed-amounts.json" }
+    }
+  ]
+}

@@ -1,0 +1,233 @@
+{
+  "reporting_entity_name": "Example Health Plan",
+  "reporting_entity_type": "Health Insurance Issuer",
+  "future_field": { "anything": [1, 2, 3] },
+  "provider_references": [
+    {
+      "provider_group_id": 1,
+      "network_name": [],
+      "provider_groups": [
+        {
+          "npi": [1111111111, 2222222222],
+          "tin": { "type": "ein", "value": "11-1111111", "business_name": "Alpha Clinic" }
+        },
+        {
+          "npi": [3333333333],
+          "tin": { "type": "ein", "value": "22-2222222", "business_name": "Beta Hospital" }
+        }
+      ]
+    },
+    {
+      "provider_group_id": 2,
+      "provider_groups": [
+        {
+          "npi": [2222222222, 0],
+          "tin": { "type": "ein", "value": "11-1111111", "business_name": "Alpha Clinic" }
+        }
+      ]
+    },
+    {
+      "provider_group_id": 3,
+      "provider_groups": [
+        {
+          "npi": [4444444444],
+          "tin": { "type": "ein", "value": "33-3333333", "business_name": "Gamma  Health," }
+        }
+      ]
+    },
+    {
+      "provider_group_id": 4,
+      "provider_groups": [
+        {
+          "npi": [2222222222],
+          "tin": { "type": "ein", "value": "111111111", "business_name": "Alpha Clinic PC" }
+        }
+      ]
+    },
+    { "provider_group_id": 5, "location": "https://example.invalid/remote-providers.json" }
+  ],
+  "in_network": [
+    {
+      "negotiation_arrangement": "ffs",
+      "name": "OFFICE/OUTPATIENT VISIT EST",
+      "billing_code_type": "CPT",
+      "billing_code_type_version": "2022",
+      "billing_code": "99213",
+      "description": "Office or other outpatient visit, established patient",
+      "negotiated_rates": [
+        {
+          "provider_references": [1],
+          "negotiated_prices": [
+            {
+              "negotiated_type": "negotiated",
+              "negotiated_rate": 50.0,
+              "expiration_date": "9999-12-31",
+              "service_code": ["11"],
+              "billing_class": "professional",
+              "billing_code_modifier": ["25"],
+              "setting": "outpatient"
+            }
+          ]
+        },
+        {
+          "provider_references": [2],
+          "negotiated_prices": [
+            {
+              "negotiated_type": "negotiated",
+              "negotiated_rate": 50.0,
+              "expiration_date": "9999-12-31",
+              "service_code": ["11"],
+              "billing_class": "professional",
+              "billing_code_modifier": ["25"],
+              "setting": "outpatient"
+            },
+            {
+              "negotiated_type": "negotiated",
+              "negotiated_rate": 70.0,
+              "expiration_date": "9999-12-31",
+              "service_code": ["10", "02"],
+              "billing_class": "professional",
+              "billing_code_modifier": ["95", "25"],
+              "setting": "outpatient"
+            }
+          ]
+        },
+        {
+          "provider_references": [3],
+          "negotiated_prices": [
+            {
+              "negotiated_type": "negotiated",
+              "negotiated_rate": 90.0,
+              "expiration_date": "2027-06-30",
+              "service_code": ["11"],
+              "billing_class": "professional",
+              "setting": "outpatient"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "negotiation_arrangement": "ffs",
+      "name": "US EXAM, ABDOM, COMPLETE",
+      "billing_code_type": "RC",
+      "billing_code_type_version": "2022",
+      "billing_code": "510",
+      "description": "Ultrasound, abdominal, complete",
+      "negotiated_rates": [
+        {
+          "provider_references": [1],
+          "negotiated_prices": [
+            {
+              "negotiated_type": "negotiated",
+              "negotiated_rate": 300.0,
+              "expiration_date": "9999-12-31",
+              "service_code": ["22"],
+              "billing_class": "institutional",
+              "additional_information": "99213",
+              "setting": "outpatient"
+            },
+            {
+              "negotiated_type": "negotiated",
+              "negotiated_rate": 120.0,
+              "expiration_date": "9999-12-31",
+              "service_code": ["22"],
+              "billing_class": "institutional",
+              "setting": "outpatient"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "negotiation_arrangement": "ffs",
+      "name": "ACNE SURGERY",
+      "billing_code_type": "RC",
+      "billing_code_type_version": "2022",
+      "billing_code": "510",
+      "description": "Acne surgery",
+      "negotiated_rates": [
+        {
+          "provider_references": [1],
+          "negotiated_prices": [
+            {
+              "negotiated_type": "negotiated",
+              "negotiated_rate": 300.0,
+              "expiration_date": "9999-12-31",
+              "service_code": ["22"],
+              "billing_class": "institutional",
+              "additional_information": "99213",
+              "setting": "outpatient"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "negotiation_arrangement": "ffs",
+      "name": "ANNUAL WELLNESS VISIT INITIAL",
+      "billing_code_type": "HCPCS",
+      "billing_code_type_version": "2022",
+      "billing_code": "g0438",
+      "description": "Annual wellness visit, initial",
+      "negotiated_rates": [
+        {
+          "provider_groups": [
+            {
+              "npi": [5555555555],
+              "tin": { "type": "ein", "value": "44-4444444", "business_name": "Delta Practice" }
+            }
+          ],
+          "negotiated_prices": [
+            {
+              "negotiated_type": "negotiated",
+              "negotiated_rate": 175.5,
+              "expiration_date": "9999-12-31",
+              "service_code": ["11"],
+              "billing_class": "professional",
+              "setting": "outpatient"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "negotiation_arrangement": "ffs",
+      "name": "BROKEN ITEM WITHOUT A CODE",
+      "billing_code_type": "CPT",
+      "negotiated_rates": []
+    },
+    {
+      "negotiation_arrangement": "ffs",
+      "name": "OFFICE/OUTPATIENT VISIT EST",
+      "billing_code_type": "CPT",
+      "billing_code_type_version": "2022",
+      "billing_code": "99214",
+      "description": "Office or other outpatient visit, established patient, moderate",
+      "negotiated_rates": [
+        {
+          "provider_references": [],
+          "negotiated_prices": [
+            { "negotiated_type": "negotiated", "negotiated_rate": 80.0, "billing_class": "professional" }
+          ]
+        },
+        {
+          "provider_references": [3],
+          "negotiated_prices": [
+            { "negotiated_type": "negotiated", "billing_class": "professional" },
+            {
+              "negotiated_type": "negotiated",
+              "negotiated_rate": "95.25",
+              "expiration_date": "not-a-date",
+              "service_code": ["11"],
+              "billing_class": "professional",
+              "setting": "outpatient"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "version": "2.0.0",
+  "last_updated_on": "2026-01-15"
+}

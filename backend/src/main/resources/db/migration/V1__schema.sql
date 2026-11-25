@@ -102,18 +102,22 @@ create table price_record (
     additional_information text,
     search_code            text    not null,
     match_kind             text    not null check (match_kind in ('billing_code', 'additional_information')),
-    raw                    jsonb   not null
+    -- json, not jsonb: the detail view shows the record exactly as the file wrote it, key order included.
+    raw                    json    not null
 );
 
 create index price_record_search_idx on price_record (source_file_id, search_code);
 
 -- Every code that can be searched, refreshed at the end of each load.
--- code_type and description exist only when the file has an item filed under the code itself.
+-- code_type, name and description exist only when the file has an item filed under the code itself.
 create materialized view code_catalog as
 select pr.source_file_id,
        pr.search_code                                                        as code,
        min(bi.billing_code_type) filter (where pr.match_kind = 'billing_code') as code_type,
-       min(coalesce(nullif(bi.description, ''), bi.name))
+       min(bi.name)
+           filter (where pr.match_kind = 'billing_code' and upper(bi.billing_code_type) <> 'RC')
+                                                                             as name,
+       min(bi.description)
            filter (where pr.match_kind = 'billing_code' and upper(bi.billing_code_type) <> 'RC')
                                                                              as description,
        count(distinct pg.tin)                                                as provider_count
