@@ -34,7 +34,8 @@ export function MatchPanel({ id, searchedNpi, onClose }: Props) {
     // Once the list is back on screen, return to the rate the reader came from.
     requestAnimationFrame(() => {
       const rate = document.getElementById(rateElementId(id))
-      rate?.scrollIntoView({ block: 'nearest' })
+      // Optional call: not every environment implements scrollIntoView.
+      rate?.scrollIntoView?.({ block: 'nearest' })
       rate?.focus({ preventScroll: true })
     })
   }
