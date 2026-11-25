@@ -1,0 +1,46 @@
+# One command runs everything: docker compose up --build
+# Then open http://localhost:3000. Ports can be changed in .env (see .env.example).
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: rates
+      POSTGRES_USER: rates
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-rates}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    ports:
+      - '${DB_PORT:-5433}:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U rates -d rates']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    build: ./backend
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/rates
+      DB_USER: rates
+      DB_PASSWORD: ${DB_PASSWORD:-rates}
+      CACHE_DIR: /data/cache
+      INDEX_URL: ${INDEX_URL:-}
+      PLAN_NAME_CONTAINS: ${PLAN_NAME_CONTAINS:-}
+    volumes:
+      - ratecache:/data/cache
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '${API_PORT:-8080}:8080'
+
+  web:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - '${WEB_PORT:-3000}:80'
+
+volumes:
+  pgdata:
+  ratecache:

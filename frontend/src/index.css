@@ -1,0 +1,77 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/dm-sans';
+@import '@fontsource-variable/jetbrains-mono';
+
+/*
+ * Design tokens. Color has one job each:
+ *   accent  - the primary action and selected states, nothing else
+ *   warn    - rates filed under a revenue code (the exception worth noticing)
+ *   danger  - errors
+ * Type uses five sizes; 13px is the floor.
+ */
+@theme {
+  --font-sans: 'DM Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-ground: #f6f8f7;
+  --color-surface: #ffffff;
+  --color-ink: #14201b;
+  --color-muted: #56635d;
+  --color-line: #dce4e0;
+  --color-line-soft: #e3e9e6;
+  --color-line-strong: #b9c7c0;
+  --color-chip: #e6ebe8;
+
+  --color-accent: #0b6b4f;
+  --color-accent-strong: #084f3a;
+  --color-accent-soft: #edf4f0;
+
+  --color-warn: #7a4a00;
+  --color-warn-soft: #fff3d6;
+  --color-warn-line: #ebcb8b;
+  --color-mark: #f5b841;
+
+  --color-danger: #8e2222;
+  --color-danger-soft: #fbedec;
+  --color-danger-line: #e3b4b1;
+
+  --color-code: #14201b;
+  --color-code-ink: #dde7e2;
+
+  --text-meta: 0.8125rem;
+  --text-meta--line-height: 1.45;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.45;
+  --text-lead: 1rem;
+  --text-lead--line-height: 1.4;
+  --text-title: 1.375rem;
+  --text-title--line-height: 1.25;
+  --text-figure: 2rem;
+  --text-figure--line-height: 1.1;
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    background: var(--color-ground);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: 1.45;
+  }
+
+  /* One visible focus style for every interactive element. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  button:not(:disabled),
+  summary,
+  select {
+    cursor: pointer;
+  }
+}
