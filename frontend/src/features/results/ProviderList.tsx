@@ -51,13 +51,17 @@ export function ProviderList({
           <span />
         </span>
       </div>
-      <ul className="flex flex-col gap-2.5 md:gap-0 md:overflow-hidden md:rounded-b-xl">
+      {/* Bottom corners use the card's radius measured inside its 1px border. */}
+      <ul className="flex flex-col gap-2.5 md:gap-0 md:overflow-hidden md:rounded-b-[calc(var(--radius-xl)-1px)]">
         {providers.map((provider) => (
           <li
             key={provider.tin}
             className={cx(
               'list-none rounded-xl border px-3 pt-3 pb-0.5',
               'md:items-start md:rounded-none md:border-0 md:border-t md:border-line-soft md:px-4 md:py-2',
+              // The last row takes the card's bottom corners, so its highlight outline
+              // follows the curve instead of being cut off square by the clipped list.
+              'md:last:rounded-b-[calc(var(--radius-xl)-1px)]',
               // The open rate lights up its whole provider row, name included.
               hasRate(provider, selectedRate)
                 ? 'border-accent bg-accent-soft md:ring-1 md:ring-accent md:ring-inset'
