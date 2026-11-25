@@ -2,7 +2,7 @@ import type { RateLine as Rate } from '../../api/types.ts'
 import { Chip } from '../../components/ui.tsx'
 import { cx } from '../../lib/cx.ts'
 import { codeTypeName, formatRate, formatVsMedian } from '../../lib/format.ts'
-import { RATE_COLUMNS, modifierText, placeOfServiceText, rateElementId } from './rateText.ts'
+import { RATE_COLUMNS, modifierCodes, placeOfServiceText, rateElementId } from './rateText.ts'
 
 interface Props {
   rate: Rate
@@ -39,7 +39,8 @@ export function RateLine({
   const vsMedian = formatVsMedian(rate.vsMedianPercent)
   const detail = [
     showSetting && rate.setting,
-    modifierText(rate.modifiers),
+    // Codes only: what each modifier means is in the detail panel, not repeated on every row.
+    modifierCodes(rate.modifiers),
     showNegotiatedType && rate.negotiatedType && `${rate.negotiatedType} rate`,
   ]
     .filter(Boolean)
@@ -111,7 +112,7 @@ export function RateLine({
 function NpiCoverage({ covered, of }: { covered: number; of: number }) {
   if (covered >= of) return null
   return (
-    <span className="text-meta text-muted">
+    <span className="text-meta whitespace-nowrap text-muted">
       {' '}
       · {covered === 0 ? 'no NPI listed' : `${covered} of ${of} NPIs`}
     </span>

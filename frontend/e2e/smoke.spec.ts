@@ -85,6 +85,15 @@ test('at phone width the search collapses and the detail takes the screen', asyn
   await expect(page.getByRole('button', { name: 'Edit search' })).toBeVisible()
   await expect(page.getByLabel(/Billing code/)).toBeHidden()
 
+  // The note on reading the list hangs from a "?" in the middle of a line. It has to
+  // stay on the screen rather than widen the page.
+  await page.getByRole('button', { name: 'How to read this list' }).click()
+  const note = await page.getByText(/Each rate is compared with the median/).boundingBox()
+  expect(note!.x).toBeGreaterThanOrEqual(0)
+  expect(note!.x + note!.width).toBeLessThanOrEqual(390)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390)
+  await page.keyboard.press('Escape')
+
   await page.getByRole('listitem').filter({ hasText: 'Gamma Health' }).getByRole('button').click()
   const panel = page.getByRole('complementary', { name: 'Why this matched' })
   await expect(panel).toContainText('This rate is filed as CPT 99213')

@@ -1,18 +1,20 @@
 import { useSearch, type SearchParams } from '../../api/queries.ts'
-import type { SearchResponse, SortOrder, SourceFile } from '../../api/types.ts'
+import type { SearchResponse, SortOrder } from '../../api/types.ts'
+import { Hint } from '../../components/Hint.tsx'
 import { Button, Chip, LoadingBar } from '../../components/ui.tsx'
 import { cx } from '../../lib/cx.ts'
 import { codeTypeName, plural, sentenceCase } from '../../lib/format.ts'
+import { useRemembered } from '../../lib/useRemembered.ts'
 import { MatchPanel } from '../detail/MatchPanel.tsx'
 import { formatEin } from '../search/validation.ts'
 import { NoResultsNotice, ResultsSkeleton, SearchFailed } from '../states/SearchStates.tsx'
 import { Pagination } from './Pagination.tsx'
 import { ProviderList } from './ProviderList.tsx'
 import { SummaryTiles } from './SummaryTiles.tsx'
+import { filedUnderNote, VS_MEDIAN_NOTE } from './notes.ts'
 
 interface Props {
   search: SearchParams
-  file: SourceFile
   selectedRate: string | null
   onSearchCode: (code: string) => void
   onRefine: (change: { billingClass?: string | null; sort?: SortOrder; page?: number }) => void
@@ -23,7 +25,6 @@ interface Props {
 /** Everything below the header for one search: summary, filters, providers and the open rate. */
 export function ResultsView({
   search,
-  file,
   selectedRate,
   onSearchCode,
   onRefine,
@@ -31,6 +32,8 @@ export function ResultsView({
   onSelectRate,
 }: Props) {
   const { data: result, error, isPending, isPlaceholderData, refetch } = useSearch(search)
+  // The "select a rate" instruction is only worth showing until someone has done it once.
+  const hasOpenedARate = useRemembered('rate-explorer.opened-a-rate', selectedRate !== null)
 
   if (error && !result) return <SearchFailed error={error} onRetry={() => void refetch()} />
   if (isPending || !result) return <ResultsSkeleton />
@@ -39,6 +42,7 @@ export function ResultsView({
   const loadingNext = isPlaceholderData
   const hasProviderFilter = result.query.npi !== null || result.query.ein !== null
   const showList = !result.noResults || result.noResults.reason === 'no_rates_in_class'
+  const filedAs = `${result.code?.type ? `${codeTypeName(result.code.type)} ` : ''}${result.query.code}`
 
   // On narrow screens an open rate takes the whole screen, so everything else steps aside.
   const behindPanel = selectedRate ? 'max-lg:hidden' : undefined
@@ -54,7 +58,7 @@ export function ResultsView({
         )}
       >
         <div className={cx('contents', behindPanel)}>
-          <ResultHeading result={result} file={file} />
+          <ResultHeading result={result} />
 
           {hasProviderFilter && (
             <div className="flex flex-wrap items-center gap-2.5">
@@ -103,14 +107,24 @@ export function ResultsView({
         ) : (
           <>
             <div className={cx('flex flex-wrap items-center justify-between gap-3', behindPanel)}>
-              <p className="text-meta text-muted">
-                <span className="font-semibold text-ink">
-                  <span className="md:hidden">Tap</span>
-                  <span className="hidden md:inline">Select</span> a rate to see where it came from.
-                </span>{' '}
-                Rates are filed as {result.code?.type ? `${codeTypeName(result.code.type)} ` : ''}
-                {result.query.code} unless marked.
-              </p>
+              <div className="flex items-center gap-2 text-meta">
+                {!hasOpenedARate && (
+                  <p className="font-semibold">
+                    <span className="md:hidden">Tap</span>
+                    <span className="hidden md:inline">Select</span> a rate to see where it came
+                    from.
+                  </p>
+                )}
+                {/* Wide screens put these notes on the column headings; phones have no headings. */}
+                <span className="md:hidden">
+                  <Hint label="How to read this list">
+                    <span className="flex flex-col gap-2">
+                      <span>{VS_MEDIAN_NOTE}</span>
+                      <span>{filedUnderNote(filedAs, result.query.code)}</span>
+                    </span>
+                  </Hint>
+                </span>
+              </div>
               <label className="flex items-center gap-2 text-meta text-muted">
                 Sort
                 <select
@@ -139,16 +153,14 @@ export function ResultsView({
                   onSelectRate={onSelectRate}
                   showSetting={result.summary.distinctSettings > 1}
                   showNegotiatedType={result.summary.distinctNegotiatedTypes > 1}
+                  filedAs={filedAs}
+                  code={result.query.code}
                 />
                 <Pagination
                   page={result.page}
                   shown={result.providers.length}
                   onPage={(page) => onRefine({ page })}
                 />
-                <p className="text-meta text-muted">
-                  Each rate is compared with the median for its billing class across every provider.
-                  A provider's price counts once.
-                </p>
               </div>
               {selectedRate && (
                 <MatchPanel
@@ -165,7 +177,7 @@ export function ResultsView({
   )
 }
 
-function ResultHeading({ result, file }: { result: SearchResponse; file: SourceFile }) {
+function ResultHeading({ result }: { result: SearchResponse }) {
   const { code, query, summary } = result
   const description = code?.description && code.description !== code.name ? code.description : null
   return (
@@ -174,24 +186,17 @@ function ResultHeading({ result, file }: { result: SearchResponse; file: SourceF
         <span>{query.code}</span>
         {code?.type && <Chip>{codeTypeName(code.type)}</Chip>}
         {code?.name && <span className="font-medium">{sentenceCase(code.name)}</span>}
+        {description && (
+          <Hint label="The file's description of this code">
+            {sentenceCase(description)}
+            {/* The file cuts descriptions at 100 characters. */}
+            {description.length >= 100 && '… (the file cuts the description off here)'}
+          </Hint>
+        )}
       </h1>
-      {description && (
-        <p className="max-w-3xl text-meta text-muted">
-          {sentenceCase(description)}
-          {/* The file cuts descriptions at 100 characters. */}
-          {description.length >= 100 && '…'}
-        </p>
-      )}
-      {code && (
+      {summary.providers > 0 && (
         <p className="text-meta text-muted" aria-live="polite">
-          {summary.providers > 0 &&
-            `${plural(summary.providers, 'provider')} · ${plural(summary.rates, 'rate')} · `}
-          {[
-            file.planGroupLabel && `${file.planGroupLabel} plans (${file.planCount})`,
-            file.lastUpdatedOn && `file dated ${file.lastUpdatedOn}`,
-          ]
-            .filter(Boolean)
-            .join(', ')}
+          {plural(summary.providers, 'provider')} · {plural(summary.rates, 'rate')}
         </p>
       )}
     </header>

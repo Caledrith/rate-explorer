@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useRateDetail } from '../../api/queries.ts'
 import type { RateDetail } from '../../api/types.ts'
+import { Hint } from '../../components/Hint.tsx'
 import { Button, Mono, Notice } from '../../components/ui.tsx'
 import { cx } from '../../lib/cx.ts'
 import { classLabel, codeTypeName, formatCount, formatRate, plural } from '../../lib/format.ts'
@@ -133,14 +134,17 @@ function Detail({ detail, searchedNpi }: { detail: RateDetail; searchedNpi: stri
     placeOfServiceText(detail.placeOfService),
     lowerFirst(modifierText(detail.modifiers)),
   ].filter(Boolean)
-  const contract = [
-    detail.negotiatedType && `${classLabel(detail.negotiatedType)} rate`,
-    detail.noEndDate
-      ? 'no end date'
-      : detail.expirationDate
-        ? `expires ${detail.expirationDate}`
-        : 'no end date stated',
+  // An ordinary negotiated rate with no end date is the norm, so only departures are stated.
+  const unusual = [
+    detail.negotiatedType &&
+      detail.negotiatedType !== 'negotiated' &&
+      `${classLabel(detail.negotiatedType)} rate`,
+    !detail.noEndDate && detail.expirationDate && `Expires ${detail.expirationDate}`,
   ].filter(Boolean)
+  // With one NPI there is nothing to list: the number goes in the heading instead.
+  const soleNpi =
+    provider.npiCount === 1 && detail.npis.total === 1 ? (detail.npis.values[0] ?? null) : null
+  const showNpiSection = soleNpi === null && detail.npis.total + detail.otherNpis.total > 0
 
   return (
     <>
@@ -148,18 +152,26 @@ function Detail({ detail, searchedNpi }: { detail: RateDetail; searchedNpi: stri
         <p className="text-figure font-bold tabular-nums">
           {formatRate(detail.rate, detail.negotiatedType)}
         </p>
-        <p className="mt-1.5 font-semibold">{provider.name}</p>
+        <p className="mt-1.5 flex items-center gap-1.5 font-semibold">
+          {provider.name}
+          {provider.nameCount > 1 && (
+            <Hint label="About this provider's name">
+              The file spells this provider's name {provider.nameCount} ways. This is the most
+              common.
+            </Hint>
+          )}
+        </p>
         <p className="text-meta text-muted tabular-nums">
           {provider.tinType === 'ein' ? 'EIN' : 'Tax ID'} {provider.tinDisplay} ·{' '}
-          {provider.npiCount === 0 ? 'no NPI listed' : plural(provider.npiCount, 'NPI')}
+          {soleNpi !== null
+            ? `NPI ${soleNpi}`
+            : provider.npiCount === 0
+              ? 'no NPI listed'
+              : plural(provider.npiCount, 'NPI')}
+          {soleNpi !== null && soleNpi === searchedNpi && ' (your search)'}
         </p>
         <p className="text-meta text-muted">{terms.join(' · ')}</p>
-        <p className="text-meta text-muted">{contract.join(' · ')}</p>
-        {provider.nameCount > 1 && (
-          <p className="text-meta text-muted">
-            The file spells this provider's name {provider.nameCount} ways. This is the most common.
-          </p>
-        )}
+        {unusual.length > 0 && <p className="text-meta text-muted">{unusual.join(' · ')}</p>}
       </div>
 
       {/* The answer comes first: where the searched code was found. */}
@@ -227,30 +239,31 @@ function Detail({ detail, searchedNpi }: { detail: RateDetail; searchedNpi: stri
         </p>
       )}
 
-      <section>
-        <h3 className="mb-2 font-bold">NPIs this rate applies to</h3>
-        <NpiChips values={detail.npis.values} highlight={searchedNpi} />
-        <p className="mt-1.5 text-meta text-muted">
-          {npiSentence(detail)}
-          {detail.npis.total > detail.npis.values.length &&
-            ` Showing the first ${detail.npis.values.length}.`}
-        </p>
-        {detail.otherNpis.total > 0 && (
-          <div className="mt-1.5">
-            <NpiChips values={detail.otherNpis.values} highlight={null} />
-          </div>
-        )}
-      </section>
+      {showNpiSection && (
+        <section>
+          <h3 className="mb-2 font-bold">NPIs this rate applies to</h3>
+          <NpiChips values={detail.npis.values} highlight={searchedNpi} />
+          <p className="mt-1.5 text-meta text-muted">
+            {npiSentence(detail)}
+            {detail.npis.total > detail.npis.values.length &&
+              ` Showing the first ${detail.npis.values.length}.`}
+          </p>
+          {detail.otherNpis.total > 0 && (
+            <div className="mt-1.5">
+              <NpiChips values={detail.otherNpis.values} highlight={null} />
+            </div>
+          )}
+        </section>
+      )}
 
       <section>
         <h3 className="mb-2 font-bold">Where it is in the file</h3>
         <dl className="flex flex-col gap-2">
           <Location
-            label={`Billing item · ${filed}${match.itemName ? `, "${match.itemName}"` : ''}`}
+            label={`Price · under ${filed}${match.itemName ? `, "${match.itemName}"` : ''}`}
           >
-            in_network[{location.itemIndex}]
+            {location.path}
           </Location>
-          <Location label="Price, full path">{location.path}</Location>
           <Location label="Provider group">
             {location.providerGroupId === null
               ? 'provider_groups written on the rate itself'

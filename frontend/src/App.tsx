@@ -39,7 +39,6 @@ export default function App() {
         ) : search ? (
           <ResultsView
             search={search}
-            file={file}
             selectedRate={selectedRate}
             onSearchCode={(code) => submit({ code })}
             onRefine={refine}

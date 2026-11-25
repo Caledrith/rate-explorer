@@ -21,6 +21,8 @@ function renderList(selectedRate: string | null) {
       onSelectRate={vi.fn()}
       showSetting={false}
       showNegotiatedType={false}
+      filedAs="CPT 99213"
+      code="99213"
     />,
   )
   const row = (name: string) => screen.getByRole('heading', { name }).closest('li')!

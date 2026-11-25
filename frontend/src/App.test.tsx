@@ -2,8 +2,8 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
 import App from './App.tsx'
-import type { RateDetail, StatusResponse } from './api/types.ts'
-import { mockApi, readyStatus, renderApp, searchResponse, sourceFile } from './test/helpers.tsx'
+import type { StatusResponse } from './api/types.ts'
+import { mockApi, rateDetail, readyStatus, renderApp, searchResponse } from './test/helpers.tsx'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -25,55 +25,7 @@ const failed: StatusResponse = {
   file: null,
 }
 
-const detail: RateDetail = {
-  id: '5-111111111',
-  searchCode: '99213',
-  rate: 300,
-  negotiatedType: 'negotiated',
-  billingClass: 'institutional',
-  setting: 'outpatient',
-  expirationDate: '9999-12-31',
-  noEndDate: true,
-  placeOfService: [{ code: '22', label: 'Outpatient hospital' }],
-  modifiers: [],
-  provider: {
-    tin: '111111111',
-    tinType: 'ein',
-    tinDisplay: '11-1111111',
-    name: 'Alpha Clinic',
-    nameCount: 2,
-    npiCount: 2,
-  },
-  match: {
-    kind: 'additional_information',
-    field: 'additional_information',
-    value: '99213',
-    filedUnder: { kind: 'additional_information', codeType: 'RC', code: '510' },
-    itemName: 'US EXAM, ABDOM, COMPLETE',
-  },
-  occurrences: { count: 2, sampleItemNames: ['US EXAM, ABDOM, COMPLETE', 'ACNE SURGERY'] },
-  location: {
-    itemIndex: 1,
-    rateIndex: 0,
-    priceIndex: 0,
-    providerGroupId: 1,
-    path: 'in_network[1].negotiated_rates[0].negotiated_prices[0]',
-  },
-  npis: { total: 1, values: ['1111111111'] },
-  otherNpis: { total: 1, values: ['2222222222'] },
-  source: {
-    indexFileName: sourceFile.indexFileName,
-    indexUrl: sourceFile.indexUrl,
-    reportingStructureIndex: 0,
-    planGroupLabel: 'Example Care',
-    planCount: 2,
-    fileName: sourceFile.fileName,
-    fileUrl: sourceFile.fileUrl,
-    schemaVersion: '2.0.0',
-    lastUpdatedOn: '2026-01-15',
-  },
-  raw: '{\n  "negotiated_rate" : 300.00,\n  "additional_information" : "99213"\n}',
-}
+const detail = rateDetail()
 
 test('while the rate file loads, progress is shown and search is locked', async () => {
   mockApi({ '/api/status': { body: loading } })

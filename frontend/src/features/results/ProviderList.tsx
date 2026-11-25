@@ -1,7 +1,9 @@
 import type { ProviderResult } from '../../api/types.ts'
+import { Hint } from '../../components/Hint.tsx'
 import { cx } from '../../lib/cx.ts'
 import { plural } from '../../lib/format.ts'
 import { RateLine } from './RateLine.tsx'
+import { filedUnderNote, VS_MEDIAN_NOTE } from './notes.ts'
 import { RATE_COLUMNS } from './rateText.ts'
 
 const PROVIDER_COLUMNS = 'md:grid md:grid-cols-[12rem_minmax(0,1fr)] md:gap-3'
@@ -13,6 +15,9 @@ interface Props {
   /** True when the rates in this result differ by setting or by negotiated type. */
   showSetting: boolean
   showNegotiatedType: boolean
+  /** The searched code with its type ("CPT 99213") and alone ("99213"), for the column notes. */
+  filedAs: string
+  code: string
 }
 
 /** One entry per provider (tax ID), each with its rates for the searched code inline. */
@@ -22,23 +27,31 @@ export function ProviderList({
   onSelectRate,
   showSetting,
   showNegotiatedType,
+  filedAs,
+  code,
 }: Props) {
   return (
-    <div className="flex flex-col gap-2.5 md:gap-0 md:overflow-hidden md:rounded-xl md:border md:border-line md:bg-surface">
-      <div
-        aria-hidden="true"
-        className={cx('hidden px-4 py-2 text-meta font-semibold text-muted', PROVIDER_COLUMNS)}
-      >
+    <div className="md:rounded-xl md:border md:border-line md:bg-surface">
+      {/* The headings sit outside the clipped list so their notes can open over the rows. */}
+      <div className={cx('hidden px-4 py-2 text-meta font-semibold text-muted', PROVIDER_COLUMNS)}>
         <span>Provider</span>
         <span className={cx('grid gap-x-3 px-2', RATE_COLUMNS)}>
           <span className="text-right">Rate</span>
-          <span>vs median</span>
+          <span className="flex items-center gap-1.5 whitespace-nowrap">
+            vs median
+            <Hint label="How rates are compared with the median">{VS_MEDIAN_NOTE}</Hint>
+          </span>
           <span>Setting and modifier</span>
-          <span>Filed under</span>
+          <span className="flex items-center gap-1.5 whitespace-nowrap">
+            Filed under
+            <Hint label="What the Filed under column means" align="right">
+              {filedUnderNote(filedAs, code)}
+            </Hint>
+          </span>
           <span />
         </span>
       </div>
-      <ul className="contents">
+      <ul className="flex flex-col gap-2.5 md:gap-0 md:overflow-hidden md:rounded-b-xl">
         {providers.map((provider) => (
           <li
             key={provider.tin}

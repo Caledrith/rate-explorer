@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation } from 'react-router'
 import { vi } from 'vitest'
 import type {
   ProviderResult,
+  RateDetail,
   RateLine,
   SearchResponse,
   SourceFile,
@@ -190,6 +191,60 @@ export function searchResponse(overrides: Partial<SearchResponse> = {}): SearchR
     ],
     page: { page: 1, pageSize: 25, totalProviders: 3, totalPages: 1 },
     noResults: null,
+    ...overrides,
+  }
+}
+
+/** A facility rate filed under a revenue code, for a provider with two NPIs. */
+export function rateDetail(overrides: Partial<RateDetail> = {}): RateDetail {
+  return {
+    id: '5-111111111',
+    searchCode: '99213',
+    rate: 300,
+    negotiatedType: 'negotiated',
+    billingClass: 'institutional',
+    setting: 'outpatient',
+    expirationDate: '9999-12-31',
+    noEndDate: true,
+    placeOfService: [{ code: '22', label: 'Outpatient hospital' }],
+    modifiers: [],
+    provider: {
+      tin: '111111111',
+      tinType: 'ein',
+      tinDisplay: '11-1111111',
+      name: 'Alpha Clinic',
+      nameCount: 2,
+      npiCount: 2,
+    },
+    match: {
+      kind: 'additional_information',
+      field: 'additional_information',
+      value: '99213',
+      filedUnder: { kind: 'additional_information', codeType: 'RC', code: '510' },
+      itemName: 'US EXAM, ABDOM, COMPLETE',
+    },
+    occurrences: { count: 2, sampleItemNames: ['US EXAM, ABDOM, COMPLETE', 'ACNE SURGERY'] },
+    location: {
+      itemIndex: 1,
+      rateIndex: 0,
+      priceIndex: 0,
+      providerGroupId: 1,
+      path: 'in_network[1].negotiated_rates[0].negotiated_prices[0]',
+    },
+    npis: { total: 1, values: ['1111111111'] },
+    otherNpis: { total: 1, values: ['2222222222'] },
+    source: {
+      indexFileName: sourceFile.indexFileName,
+      indexUrl: sourceFile.indexUrl,
+      reportingStructureIndex: 0,
+      planGroupLabel: 'Example Care',
+      planCount: 2,
+      fileName: sourceFile.fileName,
+      fileUrl: sourceFile.fileUrl,
+      schemaVersion: '2.0.0',
+      lastUpdatedOn: '2026-01-15',
+    },
+    raw: '{\n  "negotiated_rate" : 300.00,\n  "additional_information" : "99213"\n}',
     ...overrides,
   }
 }

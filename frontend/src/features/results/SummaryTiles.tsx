@@ -1,4 +1,6 @@
+import type { ReactNode } from 'react'
 import type { ClassSummary, SearchResponse } from '../../api/types.ts'
+import { Hint } from '../../components/Hint.tsx'
 import { cx } from '../../lib/cx.ts'
 import { classLabel, formatMoney, plural } from '../../lib/format.ts'
 
@@ -19,6 +21,7 @@ export function SummaryTiles({ result, onSelectClass }: Props) {
   const { summary, baseline, query } = result
   const filtered = query.npi !== null || query.ein !== null
   const found = new Map(summary.classes.map((entry) => [entry.billingClass, entry]))
+  const both = summary.providersWithBothClasses
 
   return (
     <div
@@ -26,19 +29,22 @@ export function SummaryTiles({ result, onSelectClass }: Props) {
       aria-label="Show rates"
       className="grid grid-cols-3 gap-1.5 md:grid-cols-[15rem_1fr_1fr] md:gap-2.5"
     >
-      <Tile selected={query.billingClass === null} onClick={() => onSelectClass(null)}>
+      <Tile
+        selected={query.billingClass === null}
+        onClick={() => onSelectClass(null)}
+        hint={
+          both > 0 && (
+            <Hint label="About the provider counts" align="left">
+              {both === 1 ? '1 provider has' : `${both} providers have`} both professional and
+              institutional rates, so the two class counts add up to more than the total.
+            </Hint>
+          )
+        }
+      >
         <span className="font-bold">
           All<span className="hidden md:inline"> rates</span>
         </span>
-        <span className="text-meta text-muted">
-          {plural(summary.providers, 'provider')}
-          {summary.providersWithBothClasses > 0 && (
-            <span className="hidden md:inline">
-              {' '}
-              · {summary.providersWithBothClasses} have both kinds
-            </span>
-          )}
-        </span>
+        <span className="text-meta text-muted">{plural(summary.providers, 'provider')}</span>
       </Tile>
       {baseline.map((reference) => {
         const here = found.get(reference.billingClass)
@@ -103,31 +109,37 @@ function Tile({
   disabled = false,
   wide = false,
   onClick,
+  hint,
   children,
 }: {
   selected: boolean
   disabled?: boolean
   wide?: boolean
   onClick: () => void
-  children: React.ReactNode
+  /** A "?" shown in the tile's corner on wide screens. It sits beside the button, not inside it. */
+  hint?: ReactNode
+  children: ReactNode
 }) {
   return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      disabled={disabled}
-      onClick={onClick}
-      className={cx(
-        'flex min-w-0 flex-col gap-0.5 rounded-xl border px-2.5 py-2 text-left md:px-3.5 md:py-2.5',
-        wide && 'md:flex-row md:items-center md:justify-between md:gap-4',
-        selected
-          ? 'border-accent bg-accent-soft'
-          : disabled
-            ? 'border-line-soft bg-ground text-muted'
-            : 'border-line bg-surface hover:bg-ground',
-      )}
-    >
-      {children}
-    </button>
+    <div className="relative min-w-0">
+      <button
+        type="button"
+        aria-pressed={selected}
+        disabled={disabled}
+        onClick={onClick}
+        className={cx(
+          'flex h-full w-full flex-col gap-0.5 rounded-xl border px-2.5 py-2 text-left md:px-3.5 md:py-2.5',
+          wide && 'md:flex-row md:items-center md:justify-between md:gap-4',
+          selected
+            ? 'border-accent bg-accent-soft'
+            : disabled
+              ? 'border-line-soft bg-ground text-muted'
+              : 'border-line bg-surface hover:bg-ground',
+        )}
+      >
+        {children}
+      </button>
+      {hint && <span className="absolute top-2.5 right-3 hidden md:block">{hint}</span>}
+    </div>
   )
 }

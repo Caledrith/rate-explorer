@@ -2,14 +2,7 @@ import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
 import type { SearchParams } from '../../api/queries.ts'
-import {
-  mockApi,
-  provider,
-  rate,
-  renderApp,
-  searchResponse,
-  sourceFile,
-} from '../../test/helpers.tsx'
+import { mockApi, provider, rate, renderApp, searchResponse } from '../../test/helpers.tsx'
 import { ResultsView } from './ResultsView.tsx'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -33,7 +26,7 @@ function setup(reply: { status?: number; body: unknown }, params: SearchParams =
     onClearProvider: vi.fn(),
     onSelectRate: vi.fn(),
   }
-  renderApp(<ResultsView search={params} file={sourceFile} selectedRate={null} {...handlers} />)
+  renderApp(<ResultsView search={params} selectedRate={null} {...handlers} />)
   return { ...handlers, api, user: userEvent.setup() }
 }
 
@@ -48,17 +41,22 @@ test('lists one entry per provider with its rates inline', async () => {
   expect(within(alpha).getAllByRole('button')).toHaveLength(2)
   expect(within(alpha).getByText('$50.00')).toBeInTheDocument()
   expect(within(alpha).getByText('Office (11)')).toBeInTheDocument()
-  expect(within(alpha).getByText('Modifier 25 · separate same-day visit')).toBeInTheDocument()
+  // The list shows the code; what the modifier means is left to the detail panel.
+  expect(within(alpha).getByText('Modifier 25')).toBeInTheDocument()
+  expect(screen.queryByText(/separate same-day visit/)).not.toBeInTheDocument()
 })
 
 test('only the exception is badged: a rate filed under a revenue code', async () => {
-  setup({ body: searchResponse() })
+  const { user } = setup({ body: searchResponse() })
   await screen.findByRole('heading', { name: 'Alpha Clinic' })
 
   // Two of the three rates are filed as CPT 99213 and carry no badge at all.
   expect(screen.getAllByText(/Revenue code 510/)).toHaveLength(1)
   expect(screen.queryByText('CPT 99213')).not.toBeInTheDocument()
-  expect(screen.getByText(/Rates are filed as CPT 99213 unless marked/)).toBeInTheDocument()
+  // The legend for the unbadged rates is one click away, on the column heading.
+  expect(screen.queryByText(/Blank means the rate is filed as CPT 99213/)).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'What the Filed under column means' }))
+  expect(screen.getByText(/Blank means the rate is filed as CPT 99213/)).toBeInTheDocument()
 })
 
 test('rates far from the median stand out and rates at it stay quiet', async () => {
@@ -254,9 +252,7 @@ test('setting and negotiated type appear on each rate only when the result has m
   mixed.summary.distinctNegotiatedTypes = 2
   setup({ body: mixed })
 
-  expect(
-    await screen.findByText('outpatient · Modifier 25 · separate same-day visit · negotiated rate'),
-  ).toBeInTheDocument()
+  expect(await screen.findByText('outpatient · Modifier 25 · negotiated rate')).toBeInTheDocument()
 })
 
 test('an NPI that is in the file but has no rate for the code is explained in NPI terms', async () => {
@@ -278,4 +274,43 @@ test('an NPI that is in the file but has no rate for the code is explained in NP
     await screen.findByText('NPI 5555555555 is in this file under 3 providers.'),
   ).toBeInTheDocument()
   expect(screen.getByText('It has no 99213 rate with any of them.')).toBeInTheDocument()
+})
+
+test('the instruction to select a rate shows until a rate has been opened once', async () => {
+  setup({ body: searchResponse() })
+
+  expect(await screen.findByText(/a rate to see where it came from/)).toBeInTheDocument()
+})
+
+test('once a rate has been opened in this browser, the instruction is gone', async () => {
+  localStorage.setItem('rate-explorer.opened-a-rate', '1')
+  setup({ body: searchResponse() })
+
+  await screen.findByRole('heading', { name: 'Alpha Clinic' })
+  expect(screen.queryByText(/a rate to see where it came from/)).not.toBeInTheDocument()
+})
+
+test("the heading shows the counts, and the file's long description is behind a hint", async () => {
+  const { user } = setup({ body: searchResponse() })
+
+  expect(await screen.findByText('3 providers · 6 rates')).toBeInTheDocument()
+  expect(screen.queryByText(/Office or other outpatient visit/)).not.toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: "The file's description of this code" }))
+  expect(
+    screen.getByText(/Office or other outpatient visit, established patient/),
+  ).toBeInTheDocument()
+})
+
+test('how the comparison and the provider counts work is explained on request', async () => {
+  const { user } = setup({ body: searchResponse() })
+  await screen.findByRole('heading', { name: 'Alpha Clinic' })
+
+  await user.click(screen.getByRole('button', { name: 'How rates are compared with the median' }))
+  expect(screen.getByText(/compared with the median for its billing class/)).toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: 'About the provider counts' }))
+  expect(
+    screen.getByText(/2 providers have both professional and institutional rates/),
+  ).toBeInTheDocument()
 })

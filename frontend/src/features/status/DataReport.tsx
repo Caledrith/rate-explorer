@@ -77,7 +77,10 @@ export function DataReport({ file, warning }: { file: SourceFile; warning: strin
             {file.reportingEntityName ?? 'the reporting entity'}
             {file.reportingEntityType && ` (${file.reportingEntityType.toLowerCase()})`}. The app
             found it through the index file <Mono>{file.indexFileName}</Mono>, in
-            reporting_structure[{file.reportingStructureIndex}].
+            reporting_structure[{file.reportingStructureIndex}]
+            {file.planGroupLabel
+              ? `, which covers the ${file.planGroupLabel} plans (${file.planCount}).`
+              : `, which covers ${plural(file.planCount, 'plan')}.`}
           </p>
           <p>
             <a href={file.fileUrl} target="_blank" rel="noreferrer">
