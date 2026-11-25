@@ -12,6 +12,10 @@ interface Props {
   showSetting: boolean
   showNegotiatedType: boolean
   selected: boolean
+  /** One of this provider's rates is open, so the provider's row is highlighted. */
+  rowSelected: boolean
+  /** The provider has no other rate listed, so there is nothing to tell this one apart from. */
+  onlyRate: boolean
   onSelect: (id: string) => void
 }
 
@@ -28,6 +32,8 @@ export function RateLine({
   showSetting,
   showNegotiatedType,
   selected,
+  rowSelected,
+  onlyRate,
   onSelect,
 }: Props) {
   const vsMedian = formatVsMedian(rate.vsMedianPercent)
@@ -49,9 +55,13 @@ export function RateLine({
         'grid w-full grid-cols-[5.5rem_minmax(0,1fr)_1rem] items-start gap-x-3 border-t border-line-soft py-2.5 text-left',
         'md:items-center md:rounded-md md:border md:px-2 md:py-1.5',
         RATE_COLUMNS,
-        selected
-          ? 'md:border-accent md:bg-accent-soft'
-          : 'md:border-transparent md:hover:bg-ground',
+        // The highlight belongs to the whole provider row. Inside it, the open rate is
+        // outlined only when the provider has other rates to tell it apart from.
+        selected && !onlyRate
+          ? 'md:border-accent md:bg-surface'
+          : rowSelected
+            ? 'md:border-transparent md:hover:bg-surface/60'
+            : 'md:border-transparent md:hover:bg-ground',
       )}
     >
       <span className="flex flex-col md:contents">

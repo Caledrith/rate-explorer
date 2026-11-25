@@ -43,8 +43,12 @@ export function ProviderList({
           <li
             key={provider.tin}
             className={cx(
-              'list-none rounded-xl border border-line bg-surface px-3 pt-3 pb-0.5',
+              'list-none rounded-xl border px-3 pt-3 pb-0.5',
               'md:items-start md:rounded-none md:border-0 md:border-t md:border-line-soft md:px-4 md:py-2',
+              // The open rate lights up its whole provider row, name included.
+              hasRate(provider, selectedRate)
+                ? 'border-accent bg-accent-soft md:ring-1 md:ring-accent md:ring-inset'
+                : 'border-line bg-surface',
               PROVIDER_COLUMNS,
             )}
           >
@@ -64,6 +68,8 @@ export function ProviderList({
                   showSetting={showSetting}
                   showNegotiatedType={showNegotiatedType}
                   selected={rate.id === selectedRate}
+                  rowSelected={hasRate(provider, selectedRate)}
+                  onlyRate={provider.rates.length === 1}
                   onSelect={onSelectRate}
                 />
               ))}
@@ -80,6 +86,10 @@ export function ProviderList({
       </ul>
     </div>
   )
+}
+
+function hasRate(provider: ProviderResult, rateId: string | null): boolean {
+  return rateId !== null && provider.rates.some((rate) => rate.id === rateId)
 }
 
 /** "6 NPIs, including 1881777464". A provider whose only NPI entries are invalid has none to show. */
