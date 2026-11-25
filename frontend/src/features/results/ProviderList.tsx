@@ -13,8 +13,6 @@ interface Props {
   /** True when the rates in this result differ by setting or by negotiated type. */
   showSetting: boolean
   showNegotiatedType: boolean
-  /** Dims the list while the next page or sort order is on its way. */
-  stale: boolean
 }
 
 /** One entry per provider (tax ID), each with its rates for the searched code inline. */
@@ -24,15 +22,9 @@ export function ProviderList({
   onSelectRate,
   showSetting,
   showNegotiatedType,
-  stale,
 }: Props) {
   return (
-    <div
-      className={cx(
-        'flex flex-col gap-2.5 transition-opacity md:gap-0 md:overflow-hidden md:rounded-xl md:border md:border-line md:bg-surface',
-        stale && 'opacity-60',
-      )}
-    >
+    <div className="flex flex-col gap-2.5 md:gap-0 md:overflow-hidden md:rounded-xl md:border md:border-line md:bg-surface">
       <div
         aria-hidden="true"
         className={cx('hidden px-4 py-2 text-meta font-semibold text-muted', PROVIDER_COLUMNS)}

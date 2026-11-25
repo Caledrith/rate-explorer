@@ -1,6 +1,6 @@
 import { useSearch, type SearchParams } from '../../api/queries.ts'
 import type { SearchResponse, SortOrder, SourceFile } from '../../api/types.ts'
-import { Button, Chip } from '../../components/ui.tsx'
+import { Button, Chip, LoadingBar } from '../../components/ui.tsx'
 import { cx } from '../../lib/cx.ts'
 import { codeTypeName, plural, sentenceCase } from '../../lib/format.ts'
 import { MatchPanel } from '../detail/MatchPanel.tsx'
@@ -35,6 +35,8 @@ export function ResultsView({
   if (error && !result) return <SearchFailed error={error} onRetry={() => void refetch()} />
   if (isPending || !result) return <ResultsSkeleton />
 
+  // `result` may be the previous search's answer, kept on screen while the next one loads.
+  const loadingNext = isPlaceholderData
   const hasProviderFilter = result.query.npi !== null || result.query.ein !== null
   const showList = !result.noResults || result.noResults.reason === 'no_rates_in_class'
 
@@ -42,115 +44,123 @@ export function ResultsView({
   const behindPanel = selectedRate ? 'max-lg:hidden' : undefined
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className={cx('contents', behindPanel)}>
-        <ResultHeading result={result} file={file} />
-
-        {hasProviderFilter && (
-          <div className="flex flex-wrap items-center gap-2.5">
-            <span className="rounded-lg border border-line-strong bg-surface px-2.5 py-1 tabular-nums">
-              {[
-                result.query.npi && (
-                  <span key="npi">
-                    Provider NPI <strong>{result.query.npi}</strong>
-                  </span>
-                ),
-                result.query.ein && (
-                  <span key="ein">
-                    {result.query.npi && ' · '}Provider EIN{' '}
-                    <strong>{formatEin(result.query.ein)}</strong>
-                  </span>
-                ),
-              ]}
-            </span>
-            <Button size="sm" onClick={onClearProvider}>
-              Clear provider filter
-            </Button>
-            {result.query.npi && result.summary.providers > 1 && (
-              <span className="text-meta text-muted">
-                This NPI is listed under {plural(result.summary.providers, 'provider')}. Only rates
-                that apply to it are shown.
-              </span>
-            )}
-          </div>
+    <div className="relative" aria-busy={loadingNext}>
+      {loadingNext && <LoadingBar label={`Searching for ${search.code}…`} />}
+      <div
+        className={cx(
+          'flex flex-col gap-3 transition-opacity duration-200',
+          // The delay means a quick answer swaps in with no dimming at all.
+          loadingNext && 'opacity-50 delay-300',
         )}
+      >
+        <div className={cx('contents', behindPanel)}>
+          <ResultHeading result={result} file={file} />
 
-        {showList && (
-          <SummaryTiles
+          {hasProviderFilter && (
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="rounded-lg border border-line-strong bg-surface px-2.5 py-1 tabular-nums">
+                {[
+                  result.query.npi && (
+                    <span key="npi">
+                      Provider NPI <strong>{result.query.npi}</strong>
+                    </span>
+                  ),
+                  result.query.ein && (
+                    <span key="ein">
+                      {result.query.npi && ' · '}Provider EIN{' '}
+                      <strong>{formatEin(result.query.ein)}</strong>
+                    </span>
+                  ),
+                ]}
+              </span>
+              <Button size="sm" onClick={onClearProvider}>
+                Clear provider filter
+              </Button>
+              {result.query.npi && result.summary.providers > 1 && (
+                <span className="text-meta text-muted">
+                  This NPI is listed under {plural(result.summary.providers, 'provider')}. Only
+                  rates that apply to it are shown.
+                </span>
+              )}
+            </div>
+          )}
+
+          {showList && (
+            <SummaryTiles
+              result={result}
+              onSelectClass={(billingClass) => onRefine({ billingClass })}
+            />
+          )}
+        </div>
+
+        {result.noResults ? (
+          <NoResultsNotice
             result={result}
-            onSelectClass={(billingClass) => onRefine({ billingClass })}
+            onSearchCode={onSearchCode}
+            onClearProvider={onClearProvider}
+            onClearClass={() => onRefine({ billingClass: null })}
           />
+        ) : (
+          <>
+            <div className={cx('flex flex-wrap items-center justify-between gap-3', behindPanel)}>
+              <p className="text-meta text-muted">
+                <span className="font-semibold text-ink">
+                  <span className="md:hidden">Tap</span>
+                  <span className="hidden md:inline">Select</span> a rate to see where it came from.
+                </span>{' '}
+                Rates are filed as {result.code?.type ? `${codeTypeName(result.code.type)} ` : ''}
+                {result.query.code} unless marked.
+              </p>
+              <label className="flex items-center gap-2 text-meta text-muted">
+                Sort
+                <select
+                  value={result.query.sort}
+                  onChange={(event) => onRefine({ sort: event.target.value as SortOrder })}
+                  className="rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-ink"
+                >
+                  <option value="name">Provider name, A to Z</option>
+                  <option value="rate_asc">Lowest rate first</option>
+                  <option value="rate_desc">Highest rate first</option>
+                </select>
+              </label>
+            </div>
+
+            {/* The panel takes a column only while a rate is open; otherwise the list has the full width. */}
+            <div
+              className={cx(
+                'grid items-start gap-5',
+                selectedRate && 'lg:grid-cols-[minmax(0,1fr)_25rem]',
+              )}
+            >
+              <div className={cx('flex min-w-0 flex-col gap-3', behindPanel)}>
+                <ProviderList
+                  providers={result.providers}
+                  selectedRate={selectedRate}
+                  onSelectRate={onSelectRate}
+                  showSetting={result.summary.distinctSettings > 1}
+                  showNegotiatedType={result.summary.distinctNegotiatedTypes > 1}
+                />
+                <Pagination
+                  page={result.page}
+                  shown={result.providers.length}
+                  onPage={(page) => onRefine({ page })}
+                />
+                <p className="text-meta text-muted">
+                  Each rate is compared with the median for its billing class across every provider.
+                  A provider's price counts once.
+                </p>
+              </div>
+              {selectedRate && (
+                <MatchPanel
+                  id={selectedRate}
+                  searchedNpi={result.query.npi}
+                  onClose={() => onSelectRate(null)}
+                />
+              )}
+            </div>
+          </>
         )}
       </div>
-
-      {result.noResults ? (
-        <NoResultsNotice
-          result={result}
-          onSearchCode={onSearchCode}
-          onClearProvider={onClearProvider}
-          onClearClass={() => onRefine({ billingClass: null })}
-        />
-      ) : (
-        <>
-          <div className={cx('flex flex-wrap items-center justify-between gap-3', behindPanel)}>
-            <p className="text-meta text-muted">
-              <span className="font-semibold text-ink">
-                <span className="md:hidden">Tap</span>
-                <span className="hidden md:inline">Select</span> a rate to see where it came from.
-              </span>{' '}
-              Rates are filed as {result.code?.type ? `${codeTypeName(result.code.type)} ` : ''}
-              {result.query.code} unless marked.
-            </p>
-            <label className="flex items-center gap-2 text-meta text-muted">
-              Sort
-              <select
-                value={result.query.sort}
-                onChange={(event) => onRefine({ sort: event.target.value as SortOrder })}
-                className="rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-ink"
-              >
-                <option value="name">Provider name, A to Z</option>
-                <option value="rate_asc">Lowest rate first</option>
-                <option value="rate_desc">Highest rate first</option>
-              </select>
-            </label>
-          </div>
-
-          {/* The panel takes a column only while a rate is open; otherwise the list has the full width. */}
-          <div
-            className={cx(
-              'grid items-start gap-5',
-              selectedRate && 'lg:grid-cols-[minmax(0,1fr)_25rem]',
-            )}
-          >
-            <div className={cx('flex min-w-0 flex-col gap-3', behindPanel)}>
-              <ProviderList
-                providers={result.providers}
-                selectedRate={selectedRate}
-                onSelectRate={onSelectRate}
-                showSetting={result.summary.distinctSettings > 1}
-                showNegotiatedType={result.summary.distinctNegotiatedTypes > 1}
-                stale={isPlaceholderData}
-              />
-              <Pagination
-                page={result.page}
-                shown={result.providers.length}
-                onPage={(page) => onRefine({ page })}
-              />
-              <p className="text-meta text-muted">
-                Each rate is compared with the median for its billing class across every provider. A
-                provider's price counts once.
-              </p>
-            </div>
-            {selectedRate && (
-              <MatchPanel
-                id={selectedRate}
-                searchedNpi={result.query.npi}
-                onClose={() => onSelectRate(null)}
-              />
-            )}
-          </div>
-        </>
-      )}
     </div>
   )
 }

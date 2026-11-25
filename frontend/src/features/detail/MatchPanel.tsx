@@ -22,7 +22,7 @@ interface Props {
  * Opening it moves focus to its heading; Escape or the close button returns focus to the rate.
  */
 export function MatchPanel({ id, searchedNpi, onClose }: Props) {
-  const { data, error, isPending } = useRateDetail(id)
+  const { data, error, isPending, isPlaceholderData } = useRateDetail(id)
   const heading = useRef<HTMLHeadingElement>(null)
 
   useEffect(() => {
@@ -80,7 +80,7 @@ export function MatchPanel({ id, searchedNpi, onClose }: Props) {
 
       <div className="flex flex-col gap-5 p-4 lg:p-5">
         {isPending && (
-          <div role="status" className="flex animate-pulse flex-col gap-3">
+          <div role="status" className="flex animate-appear flex-col gap-3 *:animate-pulse">
             <div className="h-9 w-32 rounded bg-line-soft" />
             <div className="h-4 w-56 rounded bg-line-soft" />
             <div className="h-24 rounded-lg bg-line-soft" />
@@ -106,7 +106,18 @@ export function MatchPanel({ id, searchedNpi, onClose }: Props) {
             </p>
           </Notice>
         )}
-        {data && <Detail detail={data} searchedNpi={searchedNpi} />}
+        {data && (
+          // While another rate loads, the previous one stays, dimming only if the wait drags on.
+          <div
+            aria-busy={isPlaceholderData}
+            className={cx(
+              'flex flex-col gap-5 transition-opacity duration-200',
+              isPlaceholderData && 'opacity-50 delay-300',
+            )}
+          >
+            <Detail detail={data} searchedNpi={searchedNpi} />
+          </div>
+        )}
       </div>
     </aside>
   )

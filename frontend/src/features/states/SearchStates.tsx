@@ -144,29 +144,35 @@ function providerSentences(code: string, noResults: NoResults): string[] {
   return sentences
 }
 
-/** Placeholder rows in the shape of the list, shown while a new search is in flight. */
+/**
+ * Placeholder rows in the shape of the list, for the first search on a page, when there
+ * is nothing earlier to keep showing. It fades in after a short delay, so a search that
+ * answers quickly never shows it at all.
+ */
 export function ResultsSkeleton() {
   return (
-    <div role="status" aria-label="Searching" className="flex animate-pulse flex-col gap-4">
-      <div className="h-7 w-80 max-w-full rounded bg-line-soft" />
-      <div className="grid grid-cols-3 gap-2.5">
-        {[0, 1, 2].map((tile) => (
-          <div key={tile} className="h-16 rounded-xl bg-line-soft" />
-        ))}
+    <div role="status" aria-label="Searching" className="animate-appear">
+      <div className="flex animate-pulse flex-col gap-4">
+        <div className="h-7 w-80 max-w-full rounded bg-line-soft" />
+        <div className="grid grid-cols-3 gap-2.5">
+          {[0, 1, 2].map((tile) => (
+            <div key={tile} className="h-16 rounded-xl bg-line-soft" />
+          ))}
+        </div>
+        <div className="overflow-hidden rounded-xl border border-line bg-surface">
+          {[0, 1, 2, 3, 4, 5].map((row) => (
+            <div
+              key={row}
+              className="flex items-center gap-6 border-t border-line-soft px-4 py-4 first:border-t-0"
+            >
+              <div className="h-4 w-40 rounded bg-line-soft" />
+              <div className="h-4 w-16 rounded bg-line-soft" />
+              <div className="hidden h-4 flex-1 rounded bg-line-soft md:block" />
+            </div>
+          ))}
+        </div>
+        <span className="sr-only">Searching…</span>
       </div>
-      <div className="overflow-hidden rounded-xl border border-line bg-surface">
-        {[0, 1, 2, 3, 4, 5].map((row) => (
-          <div
-            key={row}
-            className="flex items-center gap-6 border-t border-line-soft px-4 py-4 first:border-t-0"
-          >
-            <div className="h-4 w-40 rounded bg-line-soft" />
-            <div className="h-4 w-16 rounded bg-line-soft" />
-            <div className="hidden h-4 flex-1 rounded bg-line-soft md:block" />
-          </div>
-        ))}
-      </div>
-      <span className="sr-only">Searching…</span>
     </div>
   )
 }

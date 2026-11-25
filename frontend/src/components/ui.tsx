@@ -81,6 +81,22 @@ export function Notice({
   )
 }
 
+/**
+ * A thin moving bar for "the next answer is on its way". It is positioned over the top
+ * edge of its nearest positioned ancestor, so it takes no space and nothing shifts, and
+ * it only fades in if the wait is long enough to notice.
+ */
+export function LoadingBar({ label }: { label: string }) {
+  return (
+    <div role="status" className="pointer-events-none absolute inset-x-0 -top-2.5 animate-appear">
+      <div className="h-0.5 overflow-hidden rounded-full bg-line">
+        <div className="h-full w-1/4 animate-slide rounded-full bg-muted" />
+      </div>
+      <span className="sr-only">{label}</span>
+    </div>
+  )
+}
+
 /** Fixed-width text for identifiers, file paths and code. */
 export function Mono({ children, className }: { children: ReactNode; className?: string }) {
   return <span className={cx('font-mono text-meta break-all', className)}>{children}</span>

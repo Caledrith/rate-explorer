@@ -11,7 +11,9 @@ import type {
   StatusResponse,
 } from '../api/types.ts'
 
-type Reply = { status?: number; body: unknown } | (() => { status?: number; body: unknown })
+type Answer = { status?: number; body: unknown }
+/** A canned answer, or a function producing one. The function may return a promise to hold a request open. */
+type Reply = Answer | (() => Answer | Promise<Answer>)
 
 /**
  * Replaces fetch with canned answers keyed by "METHOD /path?query" or just "/path".
@@ -27,7 +29,7 @@ export function mockApi(replies: Record<string, Reply>) {
     const reply =
       replies[`${method} ${url}`] ?? replies[url] ?? replies[`${method} ${path}`] ?? replies[path]
     if (!reply) throw new TypeError(`Unexpected request in test: ${method} ${url}`)
-    const { status = 200, body } = typeof reply === 'function' ? reply() : reply
+    const { status = 200, body } = typeof reply === 'function' ? await reply() : reply
     return new Response(JSON.stringify(body), {
       status,
       headers: { 'Content-Type': 'application/json' },

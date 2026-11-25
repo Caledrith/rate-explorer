@@ -172,3 +172,36 @@ test('a shared link opens the same rate, and closing it keeps the search', async
   await user.keyboard('{Escape}')
   expect(view.location()).toBe('/?code=99213')
 })
+
+test('a new search keeps the previous results on screen until the next ones arrive', async () => {
+  // The answer for the second code is held back so the in-between state can be observed.
+  let release: (answer: { body: unknown }) => void = () => {}
+  const held = new Promise<{ body: unknown }>((resolve) => (release = resolve))
+  const second = searchResponse()
+  second.query.code = '99214'
+  second.providers = [second.providers[1]!]
+
+  mockApi({
+    '/api/status': { body: readyStatus },
+    '/api/codes': { body: [] },
+    '/api/search?code=99213&sort=name&page=1&pageSize=25': { body: searchResponse() },
+    '/api/search?code=99214&sort=name&page=1&pageSize=25': () => held,
+  })
+  renderApp(<App />, '/?code=99213')
+  const user = userEvent.setup()
+  expect(await screen.findByRole('heading', { name: 'Alpha Clinic' })).toBeInTheDocument()
+
+  await user.clear(screen.getByLabelText(/Billing code/))
+  await user.type(screen.getByLabelText(/Billing code/), '99214')
+  await user.click(screen.getByRole('button', { name: 'Search' }))
+
+  // No placeholder replaces the page: the earlier results are still there, marked as busy.
+  expect(screen.getByRole('heading', { name: 'Alpha Clinic' })).toBeInTheDocument()
+  expect(screen.queryByRole('status', { name: 'Searching' })).not.toBeInTheDocument()
+  expect(screen.getByText('Searching for 99214…')).toBeInTheDocument()
+
+  release({ body: second })
+  await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('99214'))
+  expect(screen.queryByRole('heading', { name: 'Alpha Clinic' })).not.toBeInTheDocument()
+  expect(screen.queryByText('Searching for 99214…')).not.toBeInTheDocument()
+})

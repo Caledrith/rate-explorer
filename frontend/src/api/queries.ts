@@ -44,17 +44,10 @@ export function useSearch(params: SearchParams | null) {
         }),
         signal,
       ),
-    // Changing the class, sort or page keeps the current list on screen until the next arrives.
-    placeholderData: (previous, previousQuery) => {
-      const before = previousQuery?.queryKey[1] as SearchParams | null | undefined
-      const sameSearch =
-        before &&
-        params &&
-        before.code === params.code &&
-        before.npi === params.npi &&
-        before.ein === params.ein
-      return sameSearch ? previous : undefined
-    },
+    // Whatever was on screen stays there until the next answer arrives, for a new code as
+    // much as for a new page. Answers usually take milliseconds, so swapping to a placeholder
+    // and back would only flash; `isPlaceholderData` tells the view it is showing the old one.
+    placeholderData: (previous) => previous,
   })
 }
 
@@ -63,6 +56,8 @@ export function useRateDetail(id: string | null) {
     queryKey: ['rate', id],
     enabled: id !== null,
     queryFn: ({ signal }) => getJson(`/api/rates/${encodeURIComponent(id!)}`, signal),
+    // Moving from one rate to another keeps the first on screen until the second arrives.
+    placeholderData: (previous) => previous,
   })
 }
 

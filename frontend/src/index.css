@@ -48,6 +48,31 @@
   --text-title--line-height: 1.25;
   --text-figure: 2rem;
   --text-figure--line-height: 1.1;
+
+  /*
+   * Loading feedback waits a moment before it shows. Most answers arrive in a few
+   * milliseconds, and a placeholder that appears and vanishes that fast reads as a flash.
+   */
+  --animate-appear: appear 0.2s ease-out 0.25s both;
+  --animate-slide: slide 1.2s ease-in-out infinite;
+
+  @keyframes appear {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slide {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(400%);
+    }
+  }
 }
 
 @layer base {
