@@ -231,12 +231,16 @@ class SearchQueries(
      * Every rate line the given providers have for the code. The NPI filter is deliberately
      * not applied to the rows here: each line reports whether it applies to the searched
      * NPI, so the caller can show matching rates and count the ones it hides.
+     *
+     * A provider's rates run lowest first, or highest first when [highestFirst] is set, so
+     * that under "highest rate first" the rate a provider was ranked by is the one on top.
      */
     fun lines(
         sourceFileId: Long,
         code: String,
         tins: List<String>,
         npi: Long?,
+        highestFirst: Boolean = false,
     ): List<LineRow> {
         if (tins.isEmpty()) return emptyList()
         return handle
@@ -265,7 +269,7 @@ class SearchQueries(
                 select l.*, coalesce(pn.npi_count, 0) as provider_npi_count
                 from line_rows l
                 left join provider_npis pn on pn.tin = l.tin
-                order by l.tin, l.negotiated_rate, l.first_price_id
+                order by l.tin, l.negotiated_rate ${if (highestFirst) "desc" else "asc"}, l.first_price_id
                 """.trimIndent(),
             ).bind("sf", sourceFileId)
             .bind("code", code)

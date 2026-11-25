@@ -185,6 +185,23 @@ class SearchIntegrationTest {
     }
 
     @Test
+    fun `the rates of one provider follow the chosen direction`() {
+        fun ratesByProvider(sort: String) =
+            search("code" to "99213", "sort" to sort).providers.map { provider -> provider.rates.map { it.rate } }
+
+        val lowestFirst = ratesByProvider("rate_asc")
+        // The fixture has a provider with more than one distinct rate, or this would prove nothing.
+        assertTrue(lowestFirst.any { it.distinct().size > 1 })
+        lowestFirst.forEach { assertEquals(it.sorted(), it) }
+
+        // Under "highest rate first" the rate a provider was ranked by is the one on top.
+        ratesByProvider("rate_desc").forEach { assertEquals(it.sortedDescending(), it) }
+
+        // By name there is no direction to follow, so rates stay lowest first.
+        ratesByProvider("name").forEach { assertEquals(it.sorted(), it) }
+    }
+
+    @Test
     fun `sorting and paging are by provider`() {
         assertEquals(
             listOf("Alpha Clinic", "Beta Hospital", "Gamma Health"),

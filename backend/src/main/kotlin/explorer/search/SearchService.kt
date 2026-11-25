@@ -58,7 +58,10 @@ class SearchService(
         }
 
         val (providerRows, totalProviders) = db.providerPage(sourceFileId, query)
-        val linesByTin = db.lines(sourceFileId, query.code, providerRows.map { it.tin }, query.npi).groupBy { it.tin }
+        val linesByTin =
+            db
+                .lines(sourceFileId, query.code, providerRows.map { it.tin }, query.npi, highestFirst = query.sort == Sort.RATE_DESC)
+                .groupBy { it.tin }
         val medians = baseline.associate { it.billingClass to it.median }
 
         val providers =
