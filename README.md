@@ -3,6 +3,9 @@
 Search the negotiated rates in a CMS Transparency in Coverage file by billing code, narrow them
 by provider NPI or EIN, and trace any rate back to the exact record it came from.
 
+**Try it:** https://serif.johnmorgannemelka.com is this code running on a small home server.
+Search `99213`, add NPI `1881777464`, then select a rate.
+
 ![Results for code 99213 with the "Why this matched" panel open](docs/results.png)
 
 ## Run it
@@ -133,7 +136,8 @@ checked against an independent implementation.
   are my own short wording, checked against a Medicare contractor's definitions; a modifier I
   could not check is shown as the bare code. Code descriptions are only what the file itself
   provides, and the file cuts them at 100 characters.
-- **No authentication, and `/api/reload` is open.** Fine for a local tool, not for a deployed one.
+- **No authentication, and `/api/reload` is open.** Fine for a local tool, not for a deployed
+  one: the hosted copy refuses reloads and limits request rates at its proxy.
 
 ## Tests
 
