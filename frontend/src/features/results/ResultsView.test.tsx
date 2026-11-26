@@ -172,7 +172,8 @@ test('a provider with no rates for the code is explained, and the code is kept',
   ).toBeInTheDocument()
   expect(screen.getByText('Shows all 3 providers with a 99213 rate.')).toBeInTheDocument()
 
-  await user.click(screen.getAllByRole('button', { name: 'Clear provider filter' }).at(-1)!)
+  // One button, in the notice: the filter bar does not repeat it.
+  await user.click(screen.getByRole('button', { name: 'Clear provider filter' }))
   expect(onClearProvider).toHaveBeenCalled()
 })
 

@@ -60,7 +60,7 @@ test('empty results explain themselves and offer a way out', async ({ page }) =>
     page.getByRole('heading', { name: 'No 99213 rates for this provider' }),
   ).toBeVisible()
   await expect(page.getByText(/in this file as Delta Practice/)).toBeVisible()
-  await page.getByRole('button', { name: 'Clear provider filter' }).last().click()
+  await page.getByRole('button', { name: 'Clear provider filter' }).click()
   await expect(page.getByRole('heading', { name: 'Gamma Health' })).toBeVisible()
 
   // A code that is not in the file suggests the closest ones.

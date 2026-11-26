@@ -42,6 +42,10 @@ export function ResultsView({
   const loadingNext = isPlaceholderData
   const hasProviderFilter = result.query.npi !== null || result.query.ein !== null
   const showList = !result.noResults || result.noResults.reason === 'no_rates_in_class'
+  // When the provider filter is why nothing was found, the notice below offers to clear it.
+  const noticeClearsProvider =
+    result.noResults?.reason === 'provider_not_in_file' ||
+    result.noResults?.reason === 'provider_has_no_rates_for_code'
   const filedAs = `${result.code?.type ? `${codeTypeName(result.code.type)} ` : ''}${result.query.code}`
 
   // On narrow screens an open rate takes the whole screen, so everything else steps aside.
@@ -77,9 +81,11 @@ export function ResultsView({
                   ),
                 ]}
               </span>
-              <Button size="sm" onClick={onClearProvider}>
-                Clear provider filter
-              </Button>
+              {!noticeClearsProvider && (
+                <Button size="sm" onClick={onClearProvider}>
+                  Clear provider filter
+                </Button>
+              )}
               {result.query.npi && result.summary.providers > 1 && (
                 <span className="text-meta text-muted">
                   This NPI is listed under {plural(result.summary.providers, 'provider')}. Only
