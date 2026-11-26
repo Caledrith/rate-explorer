@@ -1,7 +1,9 @@
+import { useState, type ReactNode } from 'react'
 import { useSearch, type SearchParams } from '../../api/queries.ts'
 import type { SearchResponse, SortOrder } from '../../api/types.ts'
 import { Hint } from '../../components/Hint.tsx'
 import { Button, Chip, LoadingBar } from '../../components/ui.tsx'
+import { useCrossFaded } from '../../lib/crossFade.ts'
 import { cx } from '../../lib/cx.ts'
 import { codeTypeName, plural, sentenceCase } from '../../lib/format.ts'
 import { useRemembered } from '../../lib/useRemembered.ts'
@@ -20,6 +22,11 @@ interface Props {
   onRefine: (change: { billingClass?: string | null; sort?: SortOrder; page?: number }) => void
   onClearProvider: () => void
   onSelectRate: (id: string | null) => void
+  /**
+   * What was on screen before this search, if anything. It stays there until the first
+   * answer arrives, so the page never empties in between.
+   */
+  before?: ReactNode
 }
 
 /** Everything below the header for one search: summary, filters, providers and the open rate. */
@@ -30,13 +37,38 @@ export function ResultsView({
   onRefine,
   onClearProvider,
   onSelectRate,
+  before,
 }: Props) {
   const { data: result, error, isPending, isPlaceholderData, refetch } = useSearch(search)
   // The "select a rate" instruction is only worth showing until someone has done it once.
   const hasOpenedARate = useRemembered('rate-explorer.opened-a-rate', selectedRate !== null)
 
-  if (error && !result) return <SearchFailed error={error} onRetry={() => void refetch()} />
-  if (isPending || !result) return <ResultsSkeleton />
+  // Going from waiting to an answer is a cross-fade, not a cut, so what is drawn (`phase`)
+  // trails what is known (`hasAnswer`) by the length of that fade.
+  const hasAnswer = Boolean(result ?? error)
+  const phase = useCrossFaded(hasAnswer ? 'answer' : 'waiting')
+  // `before` covers only the wait for this view's first answer.
+  const [answered, setAnswered] = useState(false)
+  if (!answered && hasAnswer && phase === 'answer') setAnswered(true)
+
+  if (phase === 'waiting' || !hasAnswer || isPending) {
+    if (!before || answered) return <ResultsSkeleton />
+    // The same treatment stale results get while the next answer loads: left in place, with
+    // a loading bar and a fade that only show if the wait is long enough to notice.
+    return (
+      <div className="relative" aria-busy="true">
+        <LoadingBar label={`Searching for ${search.code}…`} />
+        <div className="animate-dim">{before}</div>
+      </div>
+    )
+  }
+  if (!result) {
+    return error ? (
+      <SearchFailed error={error} onRetry={() => void refetch()} />
+    ) : (
+      <ResultsSkeleton />
+    )
+  }
 
   // `result` may be the previous search's answer, kept on screen while the next one loads.
   const loadingNext = isPlaceholderData

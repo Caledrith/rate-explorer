@@ -74,6 +74,32 @@ test('once loaded, the first screen offers codes that exist in the file', async 
   expect(view.location()).toBe('/?code=99213')
 })
 
+test('the first search leaves the start screen in place until the results are ready', async () => {
+  let deliver!: (answer: { body: unknown }) => void
+  const answer = new Promise<{ body: unknown }>((resolve) => (deliver = resolve))
+  mockApi({
+    '/api/status': { body: readyStatus },
+    '/api/codes': { body: [] },
+    '/api/search': () => answer,
+  })
+  renderApp(<App />)
+  const user = userEvent.setup()
+
+  await user.type(await screen.findByLabelText(/Billing code/), '99213')
+  await user.click(screen.getByRole('button', { name: 'Search' }))
+
+  // The search is under way, and the page has not been emptied to wait for it.
+  expect(await screen.findByText('Searching for 99213…')).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Look up a negotiated rate' })).toBeInTheDocument()
+
+  deliver({ body: searchResponse() })
+
+  expect(await screen.findByRole('heading', { name: 'Alpha Clinic' })).toBeInTheDocument()
+  expect(
+    screen.queryByRole('heading', { name: 'Look up a negotiated rate' }),
+  ).not.toBeInTheDocument()
+})
+
 test('the address bar drives the search, and searching updates it', async () => {
   mockApi({
     '/api/status': { body: readyStatus },

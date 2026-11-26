@@ -46,6 +46,49 @@ test('lists one entry per provider with its rates inline', async () => {
   expect(screen.queryByText(/separate same-day visit/)).not.toBeInTheDocument()
 })
 
+/** A search answer that the test delivers when it chooses to. */
+function heldAnswer() {
+  let deliver!: (answer: { body: unknown }) => void
+  const answer = new Promise<{ body: unknown }>((resolve) => (deliver = resolve))
+  return { reply: () => answer, deliver }
+}
+
+const idle = {
+  onSearchCode: vi.fn(),
+  onRefine: vi.fn(),
+  onClearProvider: vi.fn(),
+  onSelectRate: vi.fn(),
+}
+
+test('the first search keeps what was on screen until its answer arrives', async () => {
+  const held = heldAnswer()
+  mockApi({ '/api/search': held.reply })
+  renderApp(
+    <ResultsView search={search} selectedRate={null} before={<p>Start screen</p>} {...idle} />,
+  )
+
+  // Still there, marked as busy, and not swapped for placeholder rows.
+  expect(screen.getByText('Start screen')).toBeInTheDocument()
+  expect(screen.getByRole('status')).toHaveTextContent('Searching for 99213…')
+  expect(screen.queryByRole('status', { name: 'Searching' })).not.toBeInTheDocument()
+
+  held.deliver({ body: searchResponse() })
+
+  expect(await screen.findByRole('heading', { name: 'Alpha Clinic' })).toBeInTheDocument()
+  expect(screen.queryByText('Start screen')).not.toBeInTheDocument()
+})
+
+test('a page opened straight onto a search has nothing to keep, and shows placeholder rows', async () => {
+  const held = heldAnswer()
+  mockApi({ '/api/search': held.reply })
+  renderApp(<ResultsView search={search} selectedRate={null} {...idle} />)
+
+  expect(screen.getByRole('status', { name: 'Searching' })).toBeInTheDocument()
+
+  held.deliver({ body: searchResponse() })
+  expect(await screen.findByRole('heading', { name: 'Alpha Clinic' })).toBeInTheDocument()
+})
+
 test('only the exception is badged: a rate filed under a revenue code', async () => {
   const { user } = setup({ body: searchResponse() })
   await screen.findByRole('heading', { name: 'Alpha Clinic' })

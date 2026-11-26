@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useStatus } from './api/queries.ts'
 import { ResultsView } from './features/results/ResultsView.tsx'
 import { SearchForm } from './features/search/SearchForm.tsx'
@@ -13,6 +14,12 @@ export default function App() {
   const ready = file !== null
   // On narrow screens an open rate takes the whole screen; see MatchPanel.
   const behindPanel = search && selectedRate && ready ? 'max-xl:hidden' : ''
+
+  const start = file && <Welcome file={file} onSearchCode={(code) => submit({ code })} />
+  // Once the start screen has been shown, the first search keeps it in place while it
+  // loads. A page opened straight onto a search has nothing to keep.
+  const [startShown, setStartShown] = useState(false)
+  if (start && !search && !startShown) setStartShown(true)
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -44,9 +51,10 @@ export default function App() {
             onRefine={refine}
             onClearProvider={clearProviderFilter}
             onSelectRate={selectRate}
+            before={startShown ? start : undefined}
           />
         ) : (
-          <Welcome file={file} onSearchCode={(code) => submit({ code })} />
+          start
         )}
       </main>
 

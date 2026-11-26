@@ -40,6 +40,28 @@ test('search by code, open a rate, and trace it to the file', async ({ page }) =
   await expect(page).not.toHaveURL(/rate=/)
 })
 
+test('the first search keeps the start screen until the results are ready', async ({ page }) => {
+  // Hold the answer back, as a slow connection would.
+  let release!: () => void
+  const held = new Promise<void>((resolve) => (release = resolve))
+  await page.route('**/api/search?*', async (route) => {
+    await held
+    await route.continue()
+  })
+  const start = page.getByRole('heading', { name: 'Look up a negotiated rate' })
+  await expect(start).toBeVisible()
+
+  await searchFor(page, { code: '99213' })
+
+  // The page is not emptied while it waits.
+  await expect(page.getByText('Searching for 99213…')).toBeAttached()
+  await expect(start).toBeVisible()
+
+  release()
+  await expect(page.getByRole('heading', { name: 'Alpha Clinic' })).toBeVisible()
+  await expect(start).toBeHidden()
+})
+
 test('an NPI narrows providers and hides rates that do not apply to it', async ({ page }) => {
   await searchFor(page, { code: '99213', npi: '1111111111' })
 

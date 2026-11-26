@@ -54,6 +54,8 @@
    * milliseconds, and a placeholder that appears and vanishes that fast reads as a flash.
    */
   --animate-appear: appear 0.2s ease-out 0.25s both;
+  /* What a waiting screen does to the content it is keeping in place: fades it back, late. */
+  --animate-dim: dim 0.2s ease-out 0.3s both;
   --animate-slide: slide 1.2s ease-in-out infinite;
 
   @keyframes appear {
@@ -62,6 +64,12 @@
     }
     to {
       opacity: 1;
+    }
+  }
+
+  @keyframes dim {
+    to {
+      opacity: 0.5;
     }
   }
 
@@ -109,4 +117,10 @@
   a:hover {
     color: var(--color-accent-strong);
   }
+}
+
+/* How long one screen takes to cross-fade into the next (see lib/crossFade.ts). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.2s;
 }
