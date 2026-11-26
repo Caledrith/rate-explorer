@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import type { ButtonHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 import { cx } from '../lib/cx.ts'
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -27,6 +27,39 @@ export function Button({
       )}
       {...rest}
     />
+  )
+}
+
+/**
+ * A select whose arrow is drawn by the page. The browser's own arrow sits hard against the
+ * edge and differs from one browser to the next; this one keeps the same distance as the
+ * text does on the other side.
+ */
+export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <span className="relative inline-flex">
+      <select
+        className={cx(
+          'appearance-none rounded-lg border border-line-strong bg-surface py-1.5 pr-9 pl-3 text-ink',
+          className,
+        )}
+        {...rest}
+      >
+        {children}
+      </select>
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="pointer-events-none absolute top-1/2 right-3 size-3.5 -translate-y-1/2 text-muted"
+      >
+        <path d="m4 6 4 4 4-4" />
+      </svg>
+    </span>
   )
 }
 

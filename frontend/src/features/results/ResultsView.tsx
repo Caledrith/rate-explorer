@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearch, type SearchParams } from '../../api/queries.ts'
 import type { SearchResponse, SortOrder } from '../../api/types.ts'
 import { Hint } from '../../components/Hint.tsx'
-import { Button, Chip, LoadingBar } from '../../components/ui.tsx'
+import { Button, Chip, LoadingBar, Select } from '../../components/ui.tsx'
 import { useCrossFaded } from '../../lib/crossFade.ts'
 import { cx } from '../../lib/cx.ts'
 import { codeTypeName, plural, sentenceCase } from '../../lib/format.ts'
@@ -189,15 +189,21 @@ export function ResultsView({
         </div>
 
         {/* Stays in place when a name finds nothing, so the name can be corrected. */}
+        {/* One row: the name filter where the list starts, the sort where it ends. It stays in
+            place when a name finds nothing, so the name can be corrected. */}
         {(hasList || result.query.name !== null) && (
           <div
             ref={toolbar}
-            className={cx(
-              'flex scroll-mt-3 flex-wrap items-center justify-between gap-x-4 gap-y-2',
-              behindPanel,
-            )}
+            className={cx('flex scroll-mt-3 flex-wrap items-center gap-x-4 gap-y-2', behindPanel)}
           >
-            <div className="flex items-center gap-2 text-meta">
+            <NameFilter
+              applied={result.query.name}
+              onChange={(name) => onRefine({ name }, { replace: true })}
+              className="flex-1 sm:w-72 sm:flex-none"
+            />
+            {/* Between the two controls where there is room; a line of its own above them
+                where there is not. */}
+            <div className="order-first flex basis-full items-center gap-2 text-meta lg:order-none lg:flex-1 lg:basis-auto">
               {hasList && !hasOpenedARate && (
                 <p className="font-semibold">
                   <span className="md:hidden">Tap</span>
@@ -216,26 +222,19 @@ export function ResultsView({
                 </span>
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <NameFilter
-                applied={result.query.name}
-                onChange={(name) => onRefine({ name }, { replace: true })}
-              />
-              {hasList && (
-                <label className="flex items-center gap-2 text-meta text-muted">
-                  Sort
-                  <select
-                    value={result.query.sort}
-                    onChange={(event) => onRefine({ sort: event.target.value as SortOrder })}
-                    className="rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-ink"
-                  >
-                    <option value="name">Provider name, A to Z</option>
-                    <option value="rate_asc">Lowest rate first</option>
-                    <option value="rate_desc">Highest rate first</option>
-                  </select>
-                </label>
-              )}
-            </div>
+            {hasList && (
+              <label className="flex items-center gap-2 text-meta text-muted sm:ml-auto">
+                <span className="max-sm:sr-only">Sort</span>
+                <Select
+                  value={result.query.sort}
+                  onChange={(event) => onRefine({ sort: event.target.value as SortOrder })}
+                >
+                  <option value="name">Provider name, A to Z</option>
+                  <option value="rate_asc">Lowest rate first</option>
+                  <option value="rate_desc">Highest rate first</option>
+                </Select>
+              </label>
+            )}
           </div>
         )}
 
