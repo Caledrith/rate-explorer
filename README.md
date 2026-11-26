@@ -102,7 +102,8 @@ other.
 
 **4. Some records are unusable.** 27 NPI entries are not valid: 26 are `0` and one has nine
 digits. They are skipped and counted, not fatal, and the counts are shown under "About this
-data" in the app.
+data" in the app. The same goes for a price whose rate is negative or absurdly large (this file
+has none): `1e400` is valid JSON, and loading it would break the median for its code.
 
 `RealFileCheckTest` asserts these figures against the live file (for the unusable NPIs, the
 total of 27). I first computed them with a throwaway Python script, so the Kotlin and SQL are
@@ -147,7 +148,7 @@ cd frontend && npm run e2e:up && npm run e2e && npm run e2e:down   # browser tes
   every query against a real Postgres, using a small fixture file that packs in the awkward
   cases (repeated revenue-code price, NPI of 0, inline provider groups, truncated JSON, header
   fields after the arrays). Failure paths are covered: unreachable index, missing rate file,
-  truncated file, failed reload, a download that ends early or goes quiet (against a local
+  truncated file, JSON that is not a rate file, failed reload, a download that ends early or goes quiet (against a local
   HTTP server), and a search that is open while the file is reloaded.
 - **Frontend:** validation, formatting, each state, and the address-bar round trip.
 - **End to end:** Playwright drives nginx, the API and Postgres in Docker, loading the fixture

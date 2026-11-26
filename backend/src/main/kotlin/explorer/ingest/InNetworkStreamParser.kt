@@ -37,7 +37,9 @@ interface RateFileHandler {
  * Only one provider reference or one in_network item is held at a time. Top-level keys are
  * accepted in any order, and keys this app does not know are skipped rather than rejected.
  * A JSON syntax error (for example a truncated download) surfaces as Jackson's
- * JsonProcessingException, which carries the position where parsing stopped.
+ * JsonProcessingException, which carries the position where parsing stopped. Valid JSON
+ * that is not an in-network file (not an object, or no in_network list) is a
+ * [RateFileFormatException].
  */
 class InNetworkStreamParser(
     // Decimals are kept as written (539.40, not 539.4) so the raw record shown later is faithful.
@@ -48,6 +50,7 @@ class InNetworkStreamParser(
         handler: RateFileHandler,
     ): RateFileHeader {
         var header = RateFileHeader()
+        var hasInNetworkList = false
         mapper.factory.createParser(input).use { parser ->
             if (parser.nextToken() != JsonToken.START_OBJECT) {
                 throw RateFileFormatException("An in-network file must be a JSON object at the top level.")
@@ -61,13 +64,21 @@ class InNetworkStreamParser(
                     "version" -> header = header.copy(version = parser.scalarOrNull())
                     "last_updated_on" -> header = header.copy(lastUpdatedOn = parser.scalarOrNull())
                     "provider_references" -> parser.forEachObject { _, node -> handler.providerReference(node) }
-                    "in_network" -> parser.forEachObject { index, node -> handler.inNetworkItem(index, node) }
+                    "in_network" -> {
+                        if (parser.currentToken() == JsonToken.START_ARRAY) hasInNetworkList = true
+                        parser.forEachObject { index, node -> handler.inNetworkItem(index, node) }
+                    }
                     else -> {
                         handler.unknownTopLevelField(field)
                         parser.skipChildren()
                     }
                 }
             }
+        }
+        // An empty list is a file with no rates. No list at all is some other JSON document,
+        // and loading it as "a file with nothing in it" would hide that.
+        if (!hasInNetworkList) {
+            throw RateFileFormatException("This JSON has no in_network list, so it is not an in-network rate file.")
         }
         return header
     }

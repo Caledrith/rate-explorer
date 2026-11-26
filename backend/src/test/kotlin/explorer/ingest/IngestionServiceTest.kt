@@ -13,6 +13,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
@@ -111,6 +112,7 @@ class IngestionServiceTest {
 
         assertEquals(IngestErrorKind.FETCH, state.kind)
         assertEquals("in-network.json", state.fileName)
+        assertTrue(state.message.startsWith("Cannot read "), "the message says what is wrong, not only where: ${state.message}")
     }
 
     @Test
@@ -121,6 +123,8 @@ class IngestionServiceTest {
 
         assertEquals(IngestErrorKind.PARSE, state.kind)
         assertTrue(state.message.contains("byte"), "the message says where parsing stopped: ${state.message}")
+        // The page shows this message, so it must not carry the JSON library's own notation.
+        assertFalse(state.message.contains("Source") || state.message.contains("StreamRead"), state.message)
         assertEquals(0, count("source_file"))
         assertEquals(0, count("price_record"))
         assertEquals(0, count("provider_group"))
@@ -135,6 +139,31 @@ class IngestionServiceTest {
             assertIs<IngestState.Failed>(IngestionService(TestDatabase.config(workDir.resolve("index.json").toUri()), database).runNow())
 
         assertEquals(IngestErrorKind.PARSE, state.kind)
+    }
+
+    @Test
+    fun `a JSON object with no in_network list is a parse failure, not a file with nothing in it`() {
+        Files.copy(Path.of(Fixtures.indexUrl), workDir.resolve("index.json"))
+        Files.writeString(workDir.resolve("in-network.json"), """{"reporting_entity_name": "Example Health Plan"}""")
+
+        val state =
+            assertIs<IngestState.Failed>(IngestionService(TestDatabase.config(workDir.resolve("index.json").toUri()), database).runNow())
+
+        assertEquals(IngestErrorKind.PARSE, state.kind)
+        assertEquals(0, count("source_file"))
+    }
+
+    @Test
+    fun `a file named gz that is not gzip is a parse failure that says so`() {
+        val index = Files.readString(Path.of(Fixtures.indexUrl)).replace("\"in-network.json\"", "\"in-network.json.gz\"")
+        Files.writeString(workDir.resolve("index.json"), index)
+        Files.writeString(workDir.resolve("in-network.json.gz"), "this is not gzip data")
+
+        val state =
+            assertIs<IngestState.Failed>(IngestionService(TestDatabase.config(workDir.resolve("index.json").toUri()), database).runNow())
+
+        assertEquals(IngestErrorKind.PARSE, state.kind)
+        assertTrue(state.message.startsWith("The compressed file could not be unpacked"), state.message)
     }
 
     @Test

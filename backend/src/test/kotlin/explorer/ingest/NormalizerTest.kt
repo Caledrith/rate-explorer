@@ -3,6 +3,7 @@ package explorer.ingest
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import explorer.Fixtures
+import explorer.json.Json
 import java.math.BigDecimal
 import java.nio.file.Files
 import java.nio.file.Path
@@ -104,6 +105,37 @@ class NormalizerTest {
         val moderate = items.single { it.item.code == "99214" }.prices.single()
         assertEquals(0, moderate.rate.compareTo(BigDecimal("95.25")))
         assertNull(moderate.expirationDate)
+    }
+
+    @Test
+    fun `a rate that could not be an amount is skipped and counted, and junk in code lists is ignored`() {
+        val stats = IngestStats()
+        // Read as the app reads the file, so 1e400 stays a decimal instead of becoming infinity.
+        val item =
+            Json.exact.readTree(
+                """
+                {"billing_code_type": "CPT", "billing_code": "99213", "negotiated_rates": [{
+                  "provider_references": [1],
+                  "negotiated_prices": [
+                    {"negotiated_rate": -5},
+                    {"negotiated_rate": 1e400},
+                    {"negotiated_rate": 1e-20000},
+                    {"negotiated_rate": 1000000000000},
+                    {"negotiated_rate": 0},
+                    {"negotiated_rate": 0.125},
+                    {"negotiated_rate": 37503.00, "service_code": [11, null, "", {"a": 1}, " 22 "], "billing_code_modifier": [null, "gt"]}
+                  ]}]}
+                """.trimIndent(),
+            )
+
+        val prices = checkNotNull(Normalizer(stats).item(0, item)).prices
+
+        // Negative, beyond what a median can be worked out over, absurdly fine, and a trillion.
+        assertEquals(4, stats.skippedPrices)
+        assertEquals(listOf("0", "0.125", "37503.00"), prices.map { it.rate.toPlainString() })
+        // In a list of codes, only real entries count: a null is not the code "null".
+        assertEquals(listOf("11", "22"), prices.last().serviceCodes)
+        assertEquals(listOf("GT"), prices.last().modifiers)
     }
 
     @Test

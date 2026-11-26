@@ -65,7 +65,8 @@ const FAILURES: Record<string, { title: string; meaning: string }> = {
   },
   parse: {
     title: 'The rate file could not be read',
-    meaning: 'The file downloaded, but it is not valid JSON. It may have been cut off part way.',
+    meaning:
+      'The file arrived, but it could not be read as a rate file. It may have been cut off part way.',
   },
   database: {
     title: 'The rate file could not be saved',

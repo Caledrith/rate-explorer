@@ -28,7 +28,11 @@ class RateFileDownloader(
         uri: URI,
         onProgress: (bytes: Long, total: Long?) -> Unit,
     ): Path {
-        if (uri.scheme == "file") return Path.of(uri)
+        if (uri.scheme == "file") {
+            val path = Path.of(uri)
+            if (!Files.isReadable(path)) throw FetchException("Cannot read $path")
+            return path
+        }
 
         Files.createDirectories(cacheDir)
         val target = cacheDir.resolve(cacheName(uri))

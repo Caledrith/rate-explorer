@@ -79,6 +79,20 @@ class InNetworkStreamParserTest {
     }
 
     @Test
+    fun `an object with no in_network list is rejected, but an empty list is a file with no rates`() {
+        assertFailsWith<RateFileFormatException> {
+            InNetworkStreamParser().parse("{}".byteInputStream(), Recorder())
+        }
+        assertFailsWith<RateFileFormatException> {
+            InNetworkStreamParser().parse("""{"reporting_entity_name":"x","in_network":"none"}""".byteInputStream(), Recorder())
+        }
+
+        val recorder = Recorder()
+        InNetworkStreamParser().parse("""{"in_network":[]}""".byteInputStream(), recorder)
+        assertEquals(0, recorder.items.size)
+    }
+
+    @Test
     fun `a document that is not an object is rejected`() {
         assertFailsWith<RateFileFormatException> {
             InNetworkStreamParser().parse("[1, 2, 3]".byteInputStream(), Recorder())

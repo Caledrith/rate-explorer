@@ -13,6 +13,7 @@ import explorer.toc.RateFileSelector
 import explorer.toc.SelectedRateFile
 import explorer.toc.TocClient
 import org.slf4j.LoggerFactory
+import java.io.EOFException
 import java.io.FilterInputStream
 import java.io.IOException
 import java.io.InputStream
@@ -25,6 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.GZIPInputStream
+import java.util.zip.ZipException
 import kotlin.concurrent.thread
 
 enum class IngestPhase { FETCHING_INDEX, DOWNLOADING, PARSING, INDEXING }
@@ -352,16 +354,18 @@ class IngestionService(
             is NoRateFileException, is IndexFormatException, is IndexUnavailableException ->
                 IngestState.Failed(IngestErrorKind.INDEX, e.message ?: "The index file could not be used.", name)
             is FetchException -> IngestState.Failed(IngestErrorKind.FETCH, e.message ?: "The download failed.", name)
-            is JsonProcessingException ->
-                IngestState.Failed(
-                    IngestErrorKind.PARSE,
-                    "${e.originalMessage} (line ${e.location?.lineNr ?: "?"}, byte ${e.location?.byteOffset ?: "?"})",
-                    name,
-                )
+            is JsonProcessingException -> IngestState.Failed(IngestErrorKind.PARSE, parseMessage(e), name)
             is RateFileFormatException ->
                 IngestState.Failed(
                     IngestErrorKind.PARSE,
                     e.message ?: "The file is not an in-network file.",
+                    name,
+                )
+            // The file arrived but cannot be unpacked: a problem with its contents, not with fetching it.
+            is ZipException, is EOFException ->
+                IngestState.Failed(
+                    IngestErrorKind.PARSE,
+                    "The compressed file could not be unpacked (${e.message ?: e.javaClass.simpleName}). It may be damaged or cut off.",
                     name,
                 )
             is SQLException -> IngestState.Failed(IngestErrorKind.DATABASE, e.message ?: "The database rejected the load.", name)
@@ -432,3 +436,25 @@ private fun Connection.maxId(table: String): Long =
             rows.getLong(1)
         }
     }
+
+private val JACKSON_SOURCE = Regex("""\[Source: [^\]]*?; line: (\d+), column: (\d+)]""")
+private val JACKSON_SETTING = Regex(""", from `[^`]*`""")
+
+/**
+ * Where and why parsing stopped, in the parser's words but without its internals: Jackson
+ * describes positions as "[Source: REDACTED (...); line: 130, column: 13]" and names its
+ * own settings, neither of which helps the person reading the page.
+ */
+internal fun parseMessage(e: JsonProcessingException): String {
+    val what =
+        e.originalMessage
+            .replace(JACKSON_SOURCE) { "line ${it.groupValues[1]}, column ${it.groupValues[2]}" }
+            .replace(JACKSON_SETTING, "")
+    // Some failures (a limit exceeded, for one) are raised without a position.
+    val where =
+        e.location
+            ?.takeIf { it.lineNr > 0 && it.byteOffset >= 0 }
+            ?.let { " (line ${it.lineNr}, byte ${it.byteOffset})" }
+            .orEmpty()
+    return what + where
+}

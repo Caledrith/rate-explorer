@@ -140,7 +140,7 @@ class Normalizer(
         priceIndex: Int,
         node: JsonNode,
     ): PriceRow? {
-        val rate = node["negotiated_rate"]?.let(::decimal) ?: return null
+        val rate = node["negotiated_rate"]?.let(::decimal)?.takeIf(::isUsableRate) ?: return null
         val additionalInformation = node.text("additional_information")
         val (searchCode, matchKind) = searchCode(item.codeType, item.code, additionalInformation)
         return PriceRow(
@@ -166,6 +166,16 @@ class Normalizer(
     companion object {
         private val NPI_RANGE = 1_000_000_000L..9_999_999_999L
         private val CODE_LIKE = Regex("^[A-Za-z0-9]{3,7}$")
+        private val RATE_LIMIT = BigDecimal("1000000000000")
+        private const val RATE_DECIMALS_LIMIT = 12
+
+        /**
+         * A rate is an amount of money or a percentage. JSON allows any number, so a file can
+         * carry one that is negative, or too large or too fine for the medians to be worked
+         * out (1e400 is valid JSON). Such a price is skipped and counted like any other
+         * unusable record, instead of loading and then failing every search for its code.
+         */
+        fun isUsableRate(rate: BigDecimal): Boolean = rate.signum() >= 0 && rate < RATE_LIMIT && rate.scale() <= RATE_DECIMALS_LIMIT
 
         /**
          * The code a person would search to find this price.
@@ -218,5 +228,14 @@ private fun JsonNode.text(field: String): String? =
         ?.trim()
         ?.takeIf(String::isNotEmpty)
 
+/** The scalar entries of a list field as text. Nulls, blanks and nested values are left out. */
 private fun JsonNode.strings(field: String): List<String> =
-    this[field]?.takeIf(JsonNode::isArray)?.mapNotNull { it.asText().trim().takeIf(String::isNotEmpty) }.orEmpty()
+    this[field]
+        ?.takeIf(JsonNode::isArray)
+        ?.mapNotNull { entry ->
+            entry
+                .takeIf { it.isValueNode && !it.isNull }
+                ?.asText()
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
+        }.orEmpty()
