@@ -164,6 +164,20 @@ cd frontend && npm ci && npm run dev      # UI on :5173, proxying /api to :8080
 
 `INDEX_URL` may be a `file:` URL, which is how the tests point the app at fixtures.
 
+## Running it on a server
+
+`docker-compose.prod.yml` is an overlay for a shared host behind a proxy that terminates TLS.
+Only the web container is published, the database has no route out, every container runs
+without root privileges on a read-only filesystem with resource limits, and `DB_PASSWORD` has
+no default.
+
+```bash
+DB_PASSWORD=... WEB_BIND=<address the proxy reaches> WEB_PORT=8490 \
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+The proxy should refuse `POST /api/reload`, which is open by design for local use.
+
 ## API
 
 | Endpoint | Returns |
