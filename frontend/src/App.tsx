@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useStatus } from './api/queries.ts'
+import type { SourceFile } from './api/types.ts'
 import { useOpenRate } from './features/detail/useOpenRate.ts'
 import { ResultsView } from './features/results/ResultsView.tsx'
 import { SearchForm } from './features/search/SearchForm.tsx'
@@ -15,6 +16,14 @@ export default function App() {
   const openRate = useOpenRate(selectedRate)
 
   const file = status.data?.state === 'ready' ? status.data.file : null
+
+  const about = useRef<HTMLDetailsElement>(null)
+  function showAbout() {
+    if (!about.current) return
+    about.current.open = true
+    // Optional call: not every environment implements scrollIntoView.
+    about.current.scrollIntoView?.({ block: 'start' })
+  }
   const ready = file !== null
   // On narrow screens an open rate takes the whole screen; see MatchPanel.
   const behindPanel = search && openRate && ready ? 'max-xl:hidden' : ''
@@ -36,7 +45,12 @@ export default function App() {
             Rate Explorer
           </a>
           <SearchForm applied={search} ready={ready} onSubmit={submit} />
-          <StatusText state={status.data?.state} unreachable={status.isError} />
+          <StatusText
+            state={status.data?.state}
+            unreachable={status.isError}
+            file={file}
+            onShowFile={showAbout}
+          />
         </div>
       </header>
 
@@ -64,7 +78,7 @@ export default function App() {
 
       {file && (
         <div className={behindPanel}>
-          <DataReport file={file} warning={status.data?.warning ?? null} />
+          <DataReport file={file} warning={status.data?.warning ?? null} detailsRef={about} />
         </div>
       )}
     </div>
@@ -74,9 +88,13 @@ export default function App() {
 function StatusText({
   state,
   unreachable,
+  file,
+  onShowFile,
 }: {
   state: 'loading' | 'ready' | 'failed' | undefined
   unreachable: boolean
+  file: SourceFile | null
+  onShowFile: () => void
 }) {
   const text = unreachable
     ? 'Server not answering'
@@ -86,6 +104,15 @@ function StatusText({
         ? 'File not loaded'
         : 'Loading rate file'
   const bad = unreachable || state === 'failed'
+  // Which file, in a few words: the plans it covers and its date. The rest is one click away.
+  const which = file
+    ? [
+        file.planGroupLabel && `${file.planGroupLabel} plans`,
+        file.lastUpdatedOn && `dated ${file.lastUpdatedOn}`,
+      ]
+        .filter(Boolean)
+        .join(', ')
+    : ''
   return (
     <span
       role="status"
@@ -93,7 +120,19 @@ function StatusText({
       // case, so it steps aside there instead of taking a row of its own.
       className={`order-2 ml-auto text-meta md:order-3 md:mt-[1.875rem] ${bad ? 'font-semibold text-danger' : 'text-muted'} ${state === 'ready' ? 'md:max-lg:hidden' : ''}`}
     >
-      {text}
+      {file && !unreachable ? (
+        <button
+          type="button"
+          onClick={onShowFile}
+          className="rounded text-muted underline decoration-line-strong underline-offset-2 hover:text-ink"
+        >
+          <span>{text}</span>
+          {which && <span className="hidden xl:inline">: {which}</span>}
+          <span className="sr-only">. About this data</span>
+        </button>
+      ) : (
+        text
+      )}
     </span>
   )
 }

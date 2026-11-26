@@ -110,6 +110,61 @@ test('opening a rate leaves it where it was on screen, beside a panel that does 
   expect(Math.abs((await rate.boundingBox())!.y - topBefore)).toBeLessThanOrEqual(1)
 })
 
+test('part of a provider name narrows the list as it is typed', async ({ page }) => {
+  await searchFor(page, { code: '99213' })
+  const name = page.getByRole('searchbox', { name: 'Provider name' })
+
+  await name.fill('gam')
+  await expect(page.getByRole('heading', { name: 'Alpha Clinic' })).toBeHidden()
+  await expect(page.getByRole('heading', { name: 'Gamma Health' })).toBeVisible()
+  await expect(page).toHaveURL(/name=gam/)
+  // The box is not rebuilt as the list changes, so typing can go on.
+  await expect(name).toBeFocused()
+
+  // A name nobody has says so, and leaves the box there to correct.
+  await name.fill('zebra')
+  await expect(
+    page.getByRole('heading', { name: 'No 99213 rates for a provider with that name' }),
+  ).toBeVisible()
+  await expect(
+    page.getByText('No provider in this file has a name containing "zebra".'),
+  ).toBeVisible()
+
+  await name.fill('')
+  await expect(page.getByRole('heading', { name: 'Alpha Clinic' })).toBeVisible()
+  await expect(page).not.toHaveURL(/name=/)
+})
+
+test('with a rate open, the arrow keys move to the next rate', async ({ page }) => {
+  await searchFor(page, { code: '99213' })
+  const alpha = page.getByRole('listitem').filter({ hasText: 'Alpha Clinic' })
+  await alpha.getByRole('button', { name: /\$50\.00/ }).click()
+  const panel = page.getByRole('complementary', { name: 'Why this matched' })
+  await expect(panel).toContainText('$50.00')
+  // The rate is placed among every provider's rates for the code.
+  await expect(panel.getByRole('figure')).toContainText('below the median of $60.00')
+
+  await page.keyboard.press('ArrowDown')
+  await expect(panel).toContainText('$70.00')
+  await expect(alpha.getByRole('button', { name: /\$70\.00/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+
+  await page.keyboard.press('ArrowUp')
+  await expect(panel).toContainText('$50.00')
+})
+
+test('the header says which file is loaded and opens the details', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  const loaded = page.getByRole('button', { name: /File loaded/ })
+  await expect(loaded).toContainText('Example Care plans, dated 2026-01-15')
+
+  await loaded.click()
+
+  await expect(page.getByText(/Rates come from one Transparency in Coverage/)).toBeVisible()
+})
+
 test('an NPI narrows providers and hides rates that do not apply to it', async ({ page }) => {
   await searchFor(page, { code: '99213', npi: '1111111111' })
 
@@ -206,4 +261,13 @@ test('an open rate sits beside the list only where the list still has room', asy
   await page.setViewportSize({ width: 1280, height: 800 })
   await expect(panel).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Gamma Health' })).toBeVisible()
+
+  // Beside the panel the list is narrow, so it drops the "Filed under" column and puts the
+  // badge under the setting text. With the panel closed the column is back.
+  const filedUnderHeading = page.getByRole('button', { name: 'What the Filed under column means' })
+  await expect(filedUnderHeading).toBeHidden()
+  await expect(page.getByText('Revenue code 510').first()).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(panel).toBeHidden()
+  await expect(filedUnderHeading).toBeVisible()
 })

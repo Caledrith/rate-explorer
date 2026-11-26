@@ -26,7 +26,10 @@ export function Pagination({ page, shown, onPage }: Props) {
         </Button>
       ) : (
         page.totalPages > 1 && (
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <span className="mr-1 text-meta text-muted">
+              Page {formatCount(page.page)} of {formatCount(page.totalPages)}
+            </span>
             <Button size="sm" disabled={page.page <= 1} onClick={() => onPage(page.page - 1)}>
               Previous
             </Button>

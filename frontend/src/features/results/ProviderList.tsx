@@ -31,7 +31,7 @@ export function ProviderList({
   code,
 }: Props) {
   return (
-    <div className="lg:rounded-xl lg:border lg:border-line lg:bg-surface">
+    <div className="@container lg:rounded-xl lg:border lg:border-line lg:bg-surface">
       {/* The headings sit outside the clipped list so their notes can open over the rows. */}
       <div className={cx('hidden px-4 py-2 text-meta font-semibold text-muted', PROVIDER_COLUMNS)}>
         <span>Provider</span>
@@ -41,8 +41,16 @@ export function ProviderList({
             vs median
             <Hint label="How rates are compared with the median">{VS_MEDIAN_NOTE}</Hint>
           </span>
-          <span>Setting and modifier</span>
-          <span className="flex items-center gap-1.5 whitespace-nowrap">
+          <span className="flex items-center gap-1.5">
+            Setting and modifier
+            {/* With no "Filed under" column, its note moves here. */}
+            <span className="@4xl:hidden">
+              <Hint label="What the badge on some rates means">
+                {filedUnderNote(filedAs, code)}
+              </Hint>
+            </span>
+          </span>
+          <span className="hidden items-center gap-1.5 whitespace-nowrap @4xl:flex">
             Filed under
             <Hint label="What the Filed under column means" align="right">
               {filedUnderNote(filedAs, code)}

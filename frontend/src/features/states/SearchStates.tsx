@@ -92,7 +92,11 @@ export function NoResultsNotice({
     default:
       return (
         <Notice
-          title={`No ${query.code} rates for this provider`}
+          title={
+            query.name !== null && query.npi === null && query.ein === null
+              ? `No ${query.code} rates for a provider with that name`
+              : `No ${query.code} rates for this provider`
+          }
           actions={
             <>
               <Button variant="primary" onClick={onClearProvider}>
@@ -119,11 +123,14 @@ export function NoResultsNotice({
  * code", for an EIN, an NPI, or both together.
  */
 function providerSentences(code: string, noResults: NoResults): string[] {
-  const { ein, npi } = noResults
+  const { ein, npi, name } = noResults
   const sentences: string[] = []
 
   if (ein && !ein.inFile) sentences.push(`EIN ${ein.einDisplay} is not in this file.`)
   if (npi && !npi.inFile) sentences.push(`NPI ${npi.npi} is not in this file.`)
+  if (name?.providerCount === 0) {
+    sentences.push(`No provider in this file has a name containing "${name.name}".`)
+  }
   if (sentences.length > 0) return sentences
 
   if (ein) {
@@ -134,7 +141,19 @@ function providerSentences(code: string, noResults: NoResults): string[] {
   if (npi) {
     sentences.push(`NPI ${npi.npi} is in this file under ${plural(npi.providerCount, 'provider')}.`)
   }
-  if (ein && npi) sentences.push(`No ${code} rate applies to that EIN and NPI together.`)
+  if (name) {
+    sentences.push(
+      name.providerCount === 1
+        ? `1 provider in this file has a name containing "${name.name}".`
+        : `${plural(name.providerCount, 'provider')} in this file have a name containing "${name.name}".`,
+    )
+  }
+  if (name && (ein || npi)) sentences.push(`No ${code} rate fits all of that together.`)
+  else if (name) {
+    sentences.push(
+      name.providerCount === 1 ? `It has no ${code} rate.` : `None of them has a ${code} rate.`,
+    )
+  } else if (ein && npi) sentences.push(`No ${code} rate applies to that EIN and NPI together.`)
   else if (ein)
     sentences.push(ein.codeCount === 1 ? `It is not ${code}.` : `None of them is ${code}.`)
   else if (npi)

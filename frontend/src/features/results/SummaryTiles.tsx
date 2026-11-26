@@ -19,7 +19,7 @@ interface Props {
  */
 export function SummaryTiles({ result, onSelectClass }: Props) {
   const { summary, baseline, query } = result
-  const filtered = query.npi !== null || query.ein !== null
+  const filtered = query.npi !== null || query.ein !== null || query.name !== null
   const found = new Map(summary.classes.map((entry) => [entry.billingClass, entry]))
   const both = summary.providersWithBothClasses
 

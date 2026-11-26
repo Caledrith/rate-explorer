@@ -142,6 +142,7 @@ export function searchResponse(overrides: Partial<SearchResponse> = {}): SearchR
       npi: null,
       ein: null,
       einDisplay: null,
+      name: null,
       billingClass: null,
       sort: 'name',
       page: 1,

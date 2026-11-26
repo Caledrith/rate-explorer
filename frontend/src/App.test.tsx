@@ -100,6 +100,67 @@ test('the first search leaves the start screen in place until the results are re
   ).not.toBeInTheDocument()
 })
 
+test('the header says which file is loaded and leads to the details', async () => {
+  mockApi({ '/api/status': { body: readyStatus }, '/api/codes': { body: [] } })
+  renderApp(<App />)
+
+  const status = await screen.findByRole('button', { name: /^File loaded/ })
+  expect(status).toHaveTextContent(
+    `File loaded: ${readyStatus.file!.planGroupLabel} plans, dated ${readyStatus.file!.lastUpdatedOn}`,
+  )
+  const about = screen.getByText('About this data', { selector: 'summary' }).closest('details')!
+  expect(about).not.toHaveAttribute('open')
+
+  await userEvent.setup().click(status)
+
+  expect(about).toHaveAttribute('open')
+})
+
+test('the start screen names the codes it suggests', async () => {
+  mockApi({
+    '/api/status': { body: readyStatus },
+    '/api/codes': {
+      body: [
+        {
+          code: '90837',
+          type: 'CPT',
+          name: 'PSYTX W PT 60 MINUTES',
+          description: null,
+          providerCount: 9,
+        },
+      ],
+    },
+  })
+  const view = renderApp(<App />)
+
+  await userEvent
+    .setup()
+    .click(await screen.findByRole('button', { name: '90837 Psytx w pt 60 minutes' }))
+
+  expect(view.location()).toBe('/?code=90837')
+})
+
+test('a provider name in the address bar is part of the search, and clearing the filter drops it', async () => {
+  const api = mockApi({
+    '/api/status': { body: readyStatus },
+    '/api/codes': { body: [] },
+    '/api/search': {
+      body: searchResponse({
+        query: { ...searchResponse().query, npi: '1111111111', name: 'alpha' },
+      }),
+    },
+  })
+  const view = renderApp(<App />, '/?code=99213&npi=1111111111&name=alpha')
+
+  await screen.findByRole('heading', { name: 'Alpha Clinic' })
+  expect(api.calls.some((call) => call.includes('name=alpha'))).toBe(true)
+  expect(screen.getByRole('searchbox', { name: 'Provider name' })).toHaveValue('alpha')
+
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Clear provider filter' }))
+
+  expect(view.location()).toBe('/?code=99213')
+})
+
 test('the address bar drives the search, and searching updates it', async () => {
   mockApi({
     '/api/status': { body: readyStatus },

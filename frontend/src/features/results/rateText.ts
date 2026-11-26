@@ -3,11 +3,13 @@ import type { CodeLabel } from '../../api/types.ts'
 /**
  * Column template shared by the header row and every rate, so they line up.
  *
- * The list is a table from the `lg` breakpoint up and a stack of cards below it. The fixed
- * columns, the provider column and the row padding take about 39rem between them, so a
- * narrower list leaves the setting column too little room to hold a phrase on one line.
+ * The list is a table from the `lg` breakpoint up and a stack of cards below it. How many
+ * columns the table has depends on the list's own width, not the window's: beside the detail
+ * panel it can be under 56rem wide (the `@4xl` container size), and there the "Filed under"
+ * column is dropped and its badge sits under the setting text, which needs the room more.
  */
-export const RATE_COLUMNS = 'lg:grid-cols-[5rem_5.75rem_minmax(0,1fr)_8.5rem_1rem]'
+export const RATE_COLUMNS =
+  'lg:grid-cols-[5rem_5.75rem_minmax(0,1fr)_1rem] lg:@4xl:grid-cols-[5rem_5.75rem_minmax(0,1fr)_8.5rem_1rem]'
 
 /** DOM id of a rate's button, so focus can return to it when the detail panel closes. */
 export function rateElementId(id: string): string {

@@ -24,6 +24,7 @@ export function useSearchState() {
       code,
       npi: params.get('npi') ?? undefined,
       ein: params.get('ein') ?? undefined,
+      name: params.get('name')?.trim() || undefined,
       billingClass: params.get('class') ?? undefined,
       sort: sort && SORTS.includes(sort) ? sort : 'name',
       page: Number.isInteger(page) && page >= 1 ? page : 1,
@@ -45,27 +46,40 @@ export function useSearchState() {
 
   /** Changes one refinement of the current search. Any change returns to the first page. */
   const refine = useCallback(
-    (change: { billingClass?: string | null; sort?: SortOrder; page?: number }) => {
-      setParams((current) => {
-        const next = new URLSearchParams(current)
-        const set = (key: string, value: string | null) =>
-          value ? next.set(key, value) : next.delete(key)
-        if ('billingClass' in change) set('class', change.billingClass ?? null)
-        if (change.sort) set('sort', change.sort === 'name' ? null : change.sort)
-        set('page', change.page && change.page > 1 ? String(change.page) : null)
-        // The open rate may not be on the list any more.
-        next.delete('rate')
-        return next
-      })
+    (
+      change: {
+        billingClass?: string | null
+        sort?: SortOrder
+        page?: number
+        name?: string | null
+      },
+      // Typing in a filter replaces the current history entry instead of adding one per pause.
+      { replace = false } = {},
+    ) => {
+      setParams(
+        (current) => {
+          const next = new URLSearchParams(current)
+          const set = (key: string, value: string | null) =>
+            value ? next.set(key, value) : next.delete(key)
+          if ('billingClass' in change) set('class', change.billingClass ?? null)
+          if ('name' in change) set('name', change.name ?? null)
+          if (change.sort) set('sort', change.sort === 'name' ? null : change.sort)
+          set('page', change.page && change.page > 1 ? String(change.page) : null)
+          // The open rate may not be on the list any more.
+          next.delete('rate')
+          return next
+        },
+        { replace },
+      )
     },
     [setParams],
   )
 
-  /** Drops the NPI and EIN but keeps the code, class and sort. */
+  /** Drops the NPI, EIN and name but keeps the code, class and sort. */
   const clearProviderFilter = useCallback(() => {
     setParams((current) => {
       const next = new URLSearchParams(current)
-      for (const key of ['npi', 'ein', 'page', 'rate']) next.delete(key)
+      for (const key of ['npi', 'ein', 'name', 'page', 'rate']) next.delete(key)
       return next
     })
   }, [setParams])

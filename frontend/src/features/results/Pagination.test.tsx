@@ -29,6 +29,7 @@ test('several pages show the range and move one page at a time', async () => {
   render(<Pagination page={page({ page: 2 })} shown={25} onPage={onPage} />)
 
   expect(screen.getByText('Showing 26 to 50 of 1,013 providers')).toBeInTheDocument()
+  expect(screen.getByText('Page 2 of 41')).toBeInTheDocument()
   await userEvent.setup().click(screen.getByRole('button', { name: 'Next' }))
   expect(onPage).toHaveBeenCalledWith(3)
 })

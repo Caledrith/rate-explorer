@@ -1,4 +1,12 @@
-import { useDeferredValue, useId, useState, type FormEvent } from 'react'
+import {
+  useDeferredValue,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type Ref,
+} from 'react'
 import { useCodeSuggestions, type SearchParams } from '../../api/queries.ts'
 import { Button } from '../../components/ui.tsx'
 import { cx } from '../../lib/cx.ts'
@@ -40,6 +48,18 @@ export function SearchForm({ applied, ready, onSubmit }: Props) {
     setErrors({})
     setEditing(applied === null)
   }
+
+  // Arriving with nothing searched, typing a code is the only thing to do, so the cursor
+  // starts there. Not on touch screens, where it would bring the keyboard up over the page.
+  // Only on arrival: later searches leave focus where the reader put it.
+  const codeField = useRef<HTMLInputElement>(null)
+  const arrivedWithNoSearch = useRef(applied === null)
+  useEffect(() => {
+    const hasKeyboard =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    if (arrivedWithNoSearch.current && hasKeyboard) codeField.current?.focus()
+  }, [])
 
   const typedCode = useDeferredValue(draft.code.trim().toUpperCase())
   const suggestions = useCodeSuggestions(typedCode, ready && /^[A-Z0-9]{0,7}$/.test(typedCode))
@@ -102,7 +122,9 @@ export function SearchForm({ applied, ready, onSubmit }: Props) {
           error={errors.code}
           onChange={(value) => change('code', value)}
           className="md:w-36 lg:w-40"
-          inputClassName="font-bold"
+          inputClassName="font-bold placeholder:font-normal"
+          placeholder="e.g. 99213"
+          inputRef={codeField}
           list={listId}
           required
           autoCapitalize="characters"
@@ -172,6 +194,7 @@ function Field({
   onChange,
   className,
   inputClassName,
+  inputRef,
   ...input
 }: {
   label: string
@@ -181,6 +204,7 @@ function Field({
   onChange: (value: string) => void
   className?: string
   inputClassName?: string
+  inputRef?: Ref<HTMLInputElement>
   placeholder?: string
   list?: string
   required?: boolean
@@ -196,6 +220,7 @@ function Field({
       </label>
       <input
         id={id}
+        ref={inputRef}
         type="text"
         value={value}
         onChange={(event) => onChange(event.target.value)}

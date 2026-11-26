@@ -1,8 +1,16 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { afterEach, expect, test, vi } from 'vitest'
 import type { SearchParams } from '../../api/queries.ts'
-import { mockApi, provider, rate, renderApp, searchResponse } from '../../test/helpers.tsx'
+import {
+  mockApi,
+  provider,
+  rate,
+  rateDetail,
+  renderApp,
+  searchResponse,
+} from '../../test/helpers.tsx'
 import { ResultsView } from './ResultsView.tsx'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -132,6 +140,144 @@ test('selecting a rate asks for its detail', async () => {
   expect(onSelectRate).toHaveBeenCalledWith('4-333333333')
 })
 
+test('with a rate open, the arrow keys step through the rates in list order', async () => {
+  const onSelectRate = vi.fn()
+  mockApi({
+    '/api/search': { body: searchResponse() },
+    '/api/rates/5-111111111': { body: rateDetail() },
+  })
+  renderApp(
+    <ResultsView
+      search={search}
+      selectedRate="5-111111111"
+      {...idle}
+      onSelectRate={onSelectRate}
+    />,
+  )
+  await screen.findByRole('heading', { name: 'Gamma Health' })
+  const user = userEvent.setup()
+
+  await user.keyboard('{ArrowDown}')
+  expect(onSelectRate).toHaveBeenLastCalledWith('4-333333333')
+  // Held keys arrive faster than the page redraws; each still counts, and the list has an end.
+  await user.keyboard('{ArrowDown}')
+  expect(onSelectRate).toHaveBeenCalledTimes(1)
+  await user.keyboard('{ArrowUp}{ArrowUp}')
+  expect(onSelectRate).toHaveBeenCalledTimes(3)
+  expect(onSelectRate).not.toHaveBeenCalledWith(null)
+
+  // In a field the arrows belong to the field.
+  onSelectRate.mockClear()
+  await user.click(screen.getByRole('searchbox', { name: 'Provider name' }))
+  await user.keyboard('{ArrowDown}')
+  expect(onSelectRate).not.toHaveBeenCalled()
+})
+
+test('with no rate open, the arrow keys are left alone', async () => {
+  const { onSelectRate, user } = setup({ body: searchResponse() })
+  await screen.findByRole('heading', { name: 'Gamma Health' })
+
+  await user.keyboard('{ArrowDown}')
+
+  expect(onSelectRate).not.toHaveBeenCalled()
+})
+
+test('typing part of a provider name narrows the list without adding to history', async () => {
+  const { onRefine, user } = setup({ body: searchResponse() })
+  await screen.findByRole('heading', { name: 'Gamma Health' })
+
+  await user.type(screen.getByRole('searchbox', { name: 'Provider name' }), 'gam')
+
+  await vi.waitFor(() => expect(onRefine).toHaveBeenCalledWith({ name: 'gam' }, { replace: true }))
+})
+
+test('a name that finds nothing says so and stays editable', async () => {
+  const body = searchResponse({
+    query: { ...searchResponse().query, name: 'zebra' },
+    summary: { ...emptySummary },
+    providers: [],
+    page: { page: 1, pageSize: 25, totalProviders: 0, totalPages: 0 },
+    noResults: {
+      reason: 'provider_not_in_file',
+      closestCodes: [],
+      ein: null,
+      npi: null,
+      name: { name: 'zebra', providerCount: 0 },
+    },
+  })
+  setup({ body }, { ...search, name: 'zebra' })
+
+  expect(
+    await screen.findByRole('heading', { name: 'No 99213 rates for a provider with that name' }),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByText('No provider in this file has a name containing "zebra".'),
+  ).toBeInTheDocument()
+  // The box is still there to correct the name; sorting an empty list is not offered.
+  expect(screen.getByRole('searchbox', { name: 'Provider name' })).toHaveValue('zebra')
+  expect(screen.queryByLabelText(/^Sort/)).not.toBeInTheDocument()
+})
+
+test('a name some providers have, but none with this code, says how many', async () => {
+  const body = searchResponse({
+    query: { ...searchResponse().query, name: 'lab' },
+    summary: { ...emptySummary },
+    providers: [],
+    page: { page: 1, pageSize: 25, totalProviders: 0, totalPages: 0 },
+    noResults: {
+      reason: 'provider_has_no_rates_for_code',
+      closestCodes: [],
+      ein: null,
+      npi: null,
+      name: { name: 'lab', providerCount: 6 },
+    },
+  })
+  setup({ body }, { ...search, name: 'lab' })
+
+  expect(
+    await screen.findByText('6 providers in this file have a name containing "lab".'),
+  ).toBeInTheDocument()
+  expect(screen.getByText('None of them has a 99213 rate.')).toBeInTheDocument()
+})
+
+test('a new page of providers is shown from its top', async () => {
+  // The paging controls are at the bottom, so the top of the list is above the window.
+  const scrolled = vi.fn()
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ top: -900 } as DOMRect)
+  HTMLElement.prototype.scrollIntoView = scrolled
+  const second = searchResponse({
+    query: { ...searchResponse().query, page: 2 },
+    page: { page: 2, pageSize: 25, totalProviders: 60, totalPages: 3 },
+  })
+  mockApi({
+    '/api/search?code=99213&sort=name&page=1&pageSize=25': {
+      body: searchResponse({ page: { page: 1, pageSize: 25, totalProviders: 60, totalPages: 3 } }),
+    },
+    '/api/search?code=99213&sort=name&page=2&pageSize=25': { body: second },
+  })
+  function Paged() {
+    const [page, setPage] = useState(1)
+    return (
+      <ResultsView
+        search={{ ...search, page }}
+        selectedRate={null}
+        {...idle}
+        onRefine={(change) => setPage(change.page ?? 1)}
+      />
+    )
+  }
+  renderApp(<Paged />)
+  await screen.findByText('Page 1 of 3')
+  expect(scrolled).not.toHaveBeenCalled()
+
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Next' }))
+
+  await screen.findByText('Page 2 of 3')
+  expect(scrolled).toHaveBeenCalledWith({ block: 'start' })
+  vi.restoreAllMocks()
+  Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
+})
+
 test('an NPI search names the NPI, counts hidden rates and offers to clear the filter', async () => {
   const body = searchResponse({
     query: { ...searchResponse().query, npi: '1111111111' },
@@ -177,6 +323,7 @@ test('a code that is not in the file offers the closest codes', async () => {
       ],
       ein: null,
       npi: null,
+      name: null,
     },
   })
   const { onSearchCode, user } = setup({ body }, { ...search, code: '99216' })
@@ -203,6 +350,7 @@ test('a provider with no rates for the code is explained, and the code is kept',
         codeCount: 1,
       },
       npi: null,
+      name: null,
     },
   })
   const { onClearProvider, user } = setup({ body }, { ...search, ein: '444444444' })
@@ -231,6 +379,7 @@ test('an identifier that is not in the file at all says so', async () => {
       closestCodes: [],
       ein: null,
       npi: { npi: '9999999999', inFile: false, providerCount: 0 },
+      name: null,
     },
   })
   setup({ body }, { ...search, npi: '9999999999' })
@@ -310,6 +459,7 @@ test('an NPI that is in the file but has no rate for the code is explained in NP
       closestCodes: [],
       ein: null,
       npi: { npi: '5555555555', inFile: true, providerCount: 3 },
+      name: null,
     },
   })
   setup({ body }, { ...search, npi: '5555555555' })

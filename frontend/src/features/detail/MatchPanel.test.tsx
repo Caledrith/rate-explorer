@@ -22,6 +22,30 @@ test('an ordinary negotiated rate with no end date says nothing about either', a
   expect(panel).not.toHaveTextContent(/end date/i)
 })
 
+test("the rate is placed among every provider's rates for the code the list shows", async () => {
+  const detail = rateDetail({ rate: 75, billingClass: 'professional' })
+  const ranges = [
+    { billingClass: 'professional', providers: 3, rates: 4, median: 60, min: 50, max: 90 },
+    { billingClass: 'institutional', providers: 2, rates: 2, median: 300, min: 250, max: 400 },
+  ]
+  mockApi({ [`/api/rates/${detail.id}`]: { body: detail } })
+  const view = renderApp(
+    <MatchPanel id={detail.id} searchedNpi={null} code="99213" ranges={ranges} onClose={vi.fn()} />,
+  )
+
+  const figure = await screen.findByRole('figure')
+  expect(figure).toHaveTextContent('25% above the median of $60.00.')
+  expect(figure).toHaveTextContent('Professional rates for 99213, from 3 providers.')
+
+  // Opened for a different code than the list shows, there is nothing to compare it with.
+  view.unmount()
+  renderApp(
+    <MatchPanel id={detail.id} searchedNpi={null} code="99214" ranges={ranges} onClose={vi.fn()} />,
+  )
+  await screen.findByText('Alpha Clinic')
+  expect(screen.queryByRole('figure')).not.toBeInTheDocument()
+})
+
 test('an end date or an unusual rate type is stated', async () => {
   const panel = await open(
     rateDetail({ noEndDate: false, expirationDate: '2027-06-30', negotiatedType: 'fee schedule' }),

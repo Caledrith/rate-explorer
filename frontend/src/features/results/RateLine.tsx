@@ -92,12 +92,13 @@ export function RateLine({
         )}
       </span>
 
-      <span className="flex min-w-0 flex-col items-start gap-1 lg:contents">
+      {/* One cell holding the text with the badge under it, or two cells where there is room. */}
+      <span className="flex min-w-0 flex-col items-start gap-1 lg:@4xl:contents">
         <span className="min-w-0">
           <span className="block">{placeOfServiceText(rate.placeOfService)}</span>
           <span className="block text-meta text-muted">{detail}</span>
         </span>
-        <span>
+        <span className="empty:hidden lg:@4xl:empty:block">
           {rate.filedUnder.kind === 'additional_information' && (
             <Chip tone="warn">
               {codeTypeName(rate.filedUnder.codeType)} {rate.filedUnder.code}

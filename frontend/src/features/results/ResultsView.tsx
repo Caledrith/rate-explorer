@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearch, type SearchParams } from '../../api/queries.ts'
 import type { SearchResponse, SortOrder } from '../../api/types.ts'
 import { Hint } from '../../components/Hint.tsx'
@@ -10,16 +10,21 @@ import { useRemembered } from '../../lib/useRemembered.ts'
 import { MatchPanel } from '../detail/MatchPanel.tsx'
 import { formatEin } from '../search/validation.ts'
 import { NoResultsNotice, ResultsSkeleton, SearchFailed } from '../states/SearchStates.tsx'
+import { NameFilter } from './NameFilter.tsx'
 import { Pagination } from './Pagination.tsx'
 import { ProviderList } from './ProviderList.tsx'
 import { SummaryTiles } from './SummaryTiles.tsx'
 import { filedUnderNote, VS_MEDIAN_NOTE } from './notes.ts'
+import { rateElementId } from './rateText.ts'
 
 interface Props {
   search: SearchParams
   selectedRate: string | null
   onSearchCode: (code: string) => void
-  onRefine: (change: { billingClass?: string | null; sort?: SortOrder; page?: number }) => void
+  onRefine: (
+    change: { billingClass?: string | null; sort?: SortOrder; page?: number; name?: string | null },
+    options?: { replace?: boolean },
+  ) => void
   onClearProvider: () => void
   onSelectRate: (id: string | null) => void
   /**
@@ -42,6 +47,53 @@ export function ResultsView({
   const { data: result, error, isPending, isPlaceholderData, refetch } = useSearch(search)
   // The "select a rate" instruction is only worth showing until someone has done it once.
   const hasOpenedARate = useRemembered('rate-explorer.opened-a-rate', selectedRate !== null)
+
+  // A new page of providers starts from its top: paging happens at the bottom of the list,
+  // and the answer would otherwise arrive with its first provider off screen.
+  const toolbar = useRef<HTMLDivElement>(null)
+  const pageShown = result && !isPlaceholderData ? result.query.page : null
+  const pageBefore = useRef<number | null>(null)
+  useEffect(() => {
+    if (pageShown === null) return
+    const before = pageBefore.current
+    pageBefore.current = pageShown
+    if (before === null || before === pageShown) return
+    const top = toolbar.current
+    // Optional call: not every environment implements scrollIntoView.
+    if (top && top.getBoundingClientRect().top < 0) top.scrollIntoView?.({ block: 'start' })
+  }, [pageShown])
+
+  // With a rate open, the arrow keys step to the one below or above it in the list.
+  const rateIds = useMemo(
+    () => result?.providers.flatMap((provider) => provider.rates.map((rate) => rate.id)) ?? [],
+    [result],
+  )
+  // Where the keys have got to. It runs ahead of `selectedRate` when keys arrive faster than
+  // the page redraws, so a held key does not lose steps.
+  const cursor = useRef(selectedRate)
+  useEffect(() => {
+    cursor.current = selectedRate
+  }, [selectedRate])
+  const panelOpen = selectedRate !== null
+  useEffect(() => {
+    if (!panelOpen) return
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return
+      // In a field the arrows belong to the field.
+      if (event.target instanceof Element && event.target.closest('input, select, textarea')) return
+      const at = cursor.current === null ? -1 : rateIds.indexOf(cursor.current)
+      const next = at === -1 ? undefined : rateIds[at + (event.key === 'ArrowDown' ? 1 : -1)]
+      if (!next) return
+      event.preventDefault()
+      cursor.current = next
+      onSelectRate(next)
+      // Optional call: not every environment implements scrollIntoView.
+      document.getElementById(rateElementId(next))?.scrollIntoView?.({ block: 'nearest' })
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [panelOpen, rateIds, onSelectRate])
 
   // Going from waiting to an answer is a cross-fade, not a cut, so what is drawn (`phase`)
   // trails what is known (`hasAnswer`) by the length of that fade.
@@ -73,6 +125,7 @@ export function ResultsView({
   // `result` may be the previous search's answer, kept on screen while the next one loads.
   const loadingNext = isPlaceholderData
   const hasProviderFilter = result.query.npi !== null || result.query.ein !== null
+  const hasList = !result.noResults
   const showList = !result.noResults || result.noResults.reason === 'no_rates_in_class'
   // When the provider filter is why nothing was found, the notice below offers to clear it.
   const noticeClearsProvider =
@@ -135,6 +188,57 @@ export function ResultsView({
           )}
         </div>
 
+        {/* Stays in place when a name finds nothing, so the name can be corrected. */}
+        {(hasList || result.query.name !== null) && (
+          <div
+            ref={toolbar}
+            className={cx(
+              'flex scroll-mt-3 flex-wrap items-center justify-between gap-x-4 gap-y-2',
+              behindPanel,
+            )}
+          >
+            <div className="flex items-center gap-2 text-meta">
+              {hasList && !hasOpenedARate && (
+                <p className="font-semibold">
+                  <span className="md:hidden">Tap</span>
+                  <span className="hidden md:inline">Select</span> a rate to see where it came from.
+                </p>
+              )}
+              {/* The table puts these notes on its column headings; the cards have no headings. */}
+              {hasList && (
+                <span className="lg:hidden">
+                  <Hint label="How to read this list">
+                    <span className="flex flex-col gap-2">
+                      <span>{VS_MEDIAN_NOTE}</span>
+                      <span>{filedUnderNote(filedAs, result.query.code)}</span>
+                    </span>
+                  </Hint>
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <NameFilter
+                applied={result.query.name}
+                onChange={(name) => onRefine({ name }, { replace: true })}
+              />
+              {hasList && (
+                <label className="flex items-center gap-2 text-meta text-muted">
+                  Sort
+                  <select
+                    value={result.query.sort}
+                    onChange={(event) => onRefine({ sort: event.target.value as SortOrder })}
+                    className="rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-ink"
+                  >
+                    <option value="name">Provider name, A to Z</option>
+                    <option value="rate_asc">Lowest rate first</option>
+                    <option value="rate_desc">Highest rate first</option>
+                  </select>
+                </label>
+              )}
+            </div>
+          </div>
+        )}
+
         {result.noResults ? (
           <NoResultsNotice
             result={result}
@@ -144,39 +248,6 @@ export function ResultsView({
           />
         ) : (
           <>
-            <div className={cx('flex flex-wrap items-center justify-between gap-3', behindPanel)}>
-              <div className="flex items-center gap-2 text-meta">
-                {!hasOpenedARate && (
-                  <p className="font-semibold">
-                    <span className="md:hidden">Tap</span>
-                    <span className="hidden md:inline">Select</span> a rate to see where it came
-                    from.
-                  </p>
-                )}
-                {/* The table puts these notes on its column headings; the cards have no headings. */}
-                <span className="lg:hidden">
-                  <Hint label="How to read this list">
-                    <span className="flex flex-col gap-2">
-                      <span>{VS_MEDIAN_NOTE}</span>
-                      <span>{filedUnderNote(filedAs, result.query.code)}</span>
-                    </span>
-                  </Hint>
-                </span>
-              </div>
-              <label className="flex items-center gap-2 text-meta text-muted">
-                Sort
-                <select
-                  value={result.query.sort}
-                  onChange={(event) => onRefine({ sort: event.target.value as SortOrder })}
-                  className="rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-ink"
-                >
-                  <option value="name">Provider name, A to Z</option>
-                  <option value="rate_asc">Lowest rate first</option>
-                  <option value="rate_desc">Highest rate first</option>
-                </select>
-              </label>
-            </div>
-
             {/* The panel takes a column only while a rate is open; otherwise the list has the full width. */}
             <div
               className={cx(
@@ -204,6 +275,8 @@ export function ResultsView({
                 <MatchPanel
                   id={selectedRate}
                   searchedNpi={result.query.npi}
+                  code={result.query.code}
+                  ranges={result.baseline}
                   onClose={() => onSelectRate(null)}
                 />
               )}

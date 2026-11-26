@@ -27,7 +27,8 @@ Try `99213`, then add NPI `1881777464`, then click a rate. If a port is taken, c
 ## What it does
 
 - **Search** by billing code (required), with optional NPI and EIN. Input is checked beside
-  the field, and the server applies the same rules.
+  the field, and the server applies the same rules. A box above the list narrows it to
+  providers whose name contains what you type.
 - **One result per provider**, with that provider's rates for the code listed inline:
   amount, how far it is from the median, place of service and modifiers in words.
 - **Professional and institutional rates are summarized separately.** They are different
@@ -35,7 +36,9 @@ Try `99213`, then add NPI `1881777464`, then click a rate. If a port is taken, c
   neither. The two summary tiles are also the filter.
 - **Why this matched.** Selecting a rate shows which field the code was found in, where the
   record sits in the file (`in_network[485].negotiated_rates[17].negotiated_prices[0]`), the
-  NPIs it applies to, the source files and the raw JSON.
+  NPIs it applies to, the source files and the raw JSON. A small bar shows where the rate sits
+  between the lowest and highest for its code and class. With a rate open, the up and down
+  arrow keys step through the list.
 - **Every state is handled:** file loading (real byte progress), index or file failed to
   fetch or parse (with the reason and a retry), a download that stalls, server unreachable,
   search failed, code not in the file (with the closest codes), provider has no rates for
@@ -187,7 +190,7 @@ The proxy should refuse `POST /api/reload`, which is open by design for local us
 | Endpoint | Returns |
 |---|---|
 | `GET /api/status` | `loading` with phase and bytes, `ready` with file details, or `failed` with the reason |
-| `GET /api/search?code=&npi=&ein=&class=&sort=&page=&pageSize=` | Per-class summary, a page of providers with their rates, and a reason when empty |
+| `GET /api/search?code=&npi=&ein=&name=&class=&sort=&page=&pageSize=` | Per-class summary, a page of providers with their rates, and a reason when empty |
 | `GET /api/rates/{id}` | One rate traced to the file: match field, location, repeats, NPIs, raw record |
 | `GET /api/codes?prefix=&limit=` | Codes in the file, for suggestions |
 | `POST /api/reload` | Starts a fresh load |
@@ -195,7 +198,8 @@ The proxy should refuse `POST /api/reload`, which is open by design for local us
 ## What I would do next
 
 - A plan picker, and loading both rate files side by side.
-- Search by provider name, which the data already supports.
+- Match a provider by any spelling of its name. The name filter looks at the spelling shown,
+  which is the most common one.
 - Compare a provider's rate for a code across plans or over time, once more than one file is loaded.
 - A materialized rate table and keyset paging for files ten times this size.
 - Verified labels for every modifier in the file, from the HCPCS release rather than by hand.

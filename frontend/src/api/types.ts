@@ -112,6 +112,8 @@ export interface NoResults {
     codeCount: number
   } | null
   npi: { npi: string; inFile: boolean; providerCount: number } | null
+  /** providerCount: providers in the file, for any code, whose name contains the text. */
+  name: { name: string; providerCount: number } | null
 }
 
 export interface SearchResponse {
@@ -120,6 +122,7 @@ export interface SearchResponse {
     npi: string | null
     ein: string | null
     einDisplay: string | null
+    name: string | null
     billingClass: string | null
     sort: SortOrder
     page: number

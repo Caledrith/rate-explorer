@@ -1,16 +1,20 @@
 import { useEffect, useRef } from 'react'
 import { useRateDetail } from '../../api/queries.ts'
-import type { RateDetail } from '../../api/types.ts'
+import type { ClassSummary, RateDetail } from '../../api/types.ts'
 import { Hint } from '../../components/Hint.tsx'
 import { Button, Mono, Notice } from '../../components/ui.tsx'
 import { cx } from '../../lib/cx.ts'
 import { classLabel, codeTypeName, formatCount, formatRate, plural } from '../../lib/format.ts'
 import { modifierText, placeOfServiceText, rateElementId } from '../results/rateText.ts'
+import { RangeBar } from './RangeBar.tsx'
 
 interface Props {
   id: string
   /** The NPI that was searched, if any, so the panel can point it out. */
   searchedNpi: string | null
+  /** The code the list is showing, and every provider's rates for it by billing class. */
+  code?: string
+  ranges?: ClassSummary[]
   onClose: () => void
 }
 
@@ -22,7 +26,7 @@ interface Props {
  * thing on screen and the only thing in the tab order, with no focus trap to maintain.
  * Opening it moves focus to its heading; Escape or the close button returns focus to the rate.
  */
-export function MatchPanel({ id, searchedNpi, onClose }: Props) {
+export function MatchPanel({ id, searchedNpi, code, ranges = [], onClose }: Props) {
   const { data, error, isPending, isPlaceholderData } = useRateDetail(id)
   const heading = useRef<HTMLHeadingElement>(null)
 
@@ -95,6 +99,10 @@ export function MatchPanel({ id, searchedNpi, onClose }: Props) {
         >
           Why this matched
         </h2>
+        {/* Only where the list is beside the panel to step through. */}
+        <span className="hidden text-meta text-muted xl:order-1 xl:ml-auto xl:block">
+          <kbd className="font-sans">↑</kbd> <kbd className="font-sans">↓</kbd> other rates
+        </span>
       </div>
 
       <div className="flex flex-col gap-5 p-4 xl:p-5">
@@ -134,7 +142,16 @@ export function MatchPanel({ id, searchedNpi, onClose }: Props) {
               isPlaceholderData && 'opacity-50 delay-300',
             )}
           >
-            <Detail detail={data} searchedNpi={searchedNpi} />
+            <Detail
+              detail={data}
+              searchedNpi={searchedNpi}
+              // The comparison is with the code the list shows, in dollars.
+              range={
+                data.searchCode === code && data.negotiatedType !== 'percentage'
+                  ? ranges.find((range) => range.billingClass === data.billingClass)
+                  : undefined
+              }
+            />
           </div>
         )}
       </div>
@@ -142,7 +159,15 @@ export function MatchPanel({ id, searchedNpi, onClose }: Props) {
   )
 }
 
-function Detail({ detail, searchedNpi }: { detail: RateDetail; searchedNpi: string | null }) {
+function Detail({
+  detail,
+  searchedNpi,
+  range,
+}: {
+  detail: RateDetail
+  searchedNpi: string | null
+  range?: ClassSummary
+}) {
   const { match, provider, occurrences, location, source } = detail
   const viaRevenueCode = match.kind === 'additional_information'
   const filed = `${codeTypeName(match.filedUnder.codeType)} ${match.filedUnder.code}`
@@ -191,6 +216,8 @@ function Detail({ detail, searchedNpi }: { detail: RateDetail; searchedNpi: stri
         <p className="text-meta text-muted">{terms.join(' · ')}</p>
         {unusual.length > 0 && <p className="text-meta text-muted">{unusual.join(' · ')}</p>}
       </div>
+
+      {range && <RangeBar rate={detail.rate} range={range} code={detail.searchCode} />}
 
       {/* The answer comes first: where the searched code was found. */}
       <div className="flex flex-col gap-2.5 rounded-lg bg-ground px-4 py-3.5">

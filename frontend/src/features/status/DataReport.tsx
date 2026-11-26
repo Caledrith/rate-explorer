@@ -1,7 +1,8 @@
 import { useCodeSuggestions } from '../../api/queries.ts'
 import type { SourceFile } from '../../api/types.ts'
 import { Button, Mono } from '../../components/ui.tsx'
-import { formatCount, formatMegabytes, plural } from '../../lib/format.ts'
+import type { Ref } from 'react'
+import { formatCount, formatMegabytes, plural, sentenceCase } from '../../lib/format.ts'
 
 /** The first screen once the file is loaded: what this is, and codes that are known to work. */
 export function Welcome({
@@ -28,13 +29,26 @@ export function Welcome({
         {file.lastUpdatedOn && `, file dated ${file.lastUpdatedOn}`}.
       </p>
       {common.data && common.data.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-meta text-muted">Codes with the most providers in this file:</span>
-          {common.data.map((code) => (
-            <Button key={code.code} size="sm" onClick={() => onSearchCode(code.code)}>
-              {code.code}
-            </Button>
-          ))}
+        <div className="flex flex-col gap-2">
+          <p className="text-meta text-muted">Codes with the most providers in this file:</p>
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {common.data.map((code) => (
+              <li key={code.code} className="list-none">
+                <Button
+                  size="sm"
+                  className="flex w-full items-baseline gap-2 py-1.5 text-left"
+                  onClick={() => onSearchCode(code.code)}
+                >
+                  <span className="tabular-nums">{code.code}</span>{' '}
+                  {code.name && (
+                    <span className="truncate font-normal text-muted">
+                      {sentenceCase(code.name)}
+                    </span>
+                  )}
+                </Button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </section>
@@ -58,7 +72,16 @@ const SKIPPED: Array<[key: string, singular: string, plural: string]> = [
  * What was loaded and what was left out. Skipped records are counted during ingestion
  * rather than dropped silently, and this is where a reader can see them.
  */
-export function DataReport({ file, warning }: { file: SourceFile; warning: string | null }) {
+export function DataReport({
+  file,
+  warning,
+  detailsRef,
+}: {
+  file: SourceFile
+  warning: string | null
+  /** Lets the header's "File loaded" open this section. */
+  detailsRef?: Ref<HTMLDetailsElement>
+}) {
   const number = (key: string) =>
     typeof file.stats[key] === 'number' ? (file.stats[key] as number) : 0
   const skipped = SKIPPED.filter(([key]) => number(key) > 0)
@@ -69,7 +92,7 @@ export function DataReport({ file, warning }: { file: SourceFile; warning: strin
   return (
     <footer className="border-t border-line px-4 py-3 text-meta text-muted md:px-8">
       {warning && <p className="mb-2 text-warn">{warning}</p>}
-      <details>
+      <details ref={detailsRef} className="scroll-mt-3">
         <summary className="font-semibold text-ink">About this data</summary>
         <div className="flex max-w-3xl flex-col gap-2 pt-2">
           <p>

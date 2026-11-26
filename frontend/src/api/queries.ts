@@ -7,6 +7,8 @@ export interface SearchParams {
   code: string
   npi?: string
   ein?: string
+  /** Text the provider's name must contain. */
+  name?: string
   billingClass?: string
   sort: SortOrder
   page: number
@@ -37,6 +39,7 @@ export function useSearch(params: SearchParams | null) {
           code: params!.code,
           npi: params!.npi,
           ein: params!.ein,
+          name: params!.name,
           class: params!.billingClass,
           sort: params!.sort,
           page: params!.page,
