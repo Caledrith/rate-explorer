@@ -36,7 +36,8 @@ Try `99213`, then add NPI `1881777464`, then click a rate. If a port is taken, c
 - **Every state is handled:** file loading (real byte progress), index or file failed to
   fetch or parse (with the reason and a retry), a download that stalls, server unreachable,
   search failed, code not in the file (with the closest codes), provider has no rates for
-  the code (clear the filter, keep the code), and invalid input.
+  the code (clear the filter, keep the code), and invalid input. If a component throws
+  anyway, the page shows a message and a reload button instead of going blank.
 - **The address bar is the state**, so any search or open rate can be shared, and Back works.
 
 | Narrowed to one NPI, on a phone | A provider with no rate for the code |

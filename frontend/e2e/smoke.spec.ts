@@ -78,6 +78,20 @@ test('invalid input is caught beside the field', async ({ page }) => {
   await expect(page).not.toHaveURL(/code=/)
 })
 
+test('an answer the page cannot draw leaves a message, not a blank page', async ({ page }) => {
+  // A 200 with the wrong shape is the one failure no request handler can catch.
+  await page.route('**/api/search?*', (route) => route.fulfill({ json: {} }))
+  await searchFor(page, { code: '99213' })
+
+  await expect(page.getByRole('alert')).toContainText('This page hit a problem')
+
+  // The search is in the address bar, so reloading brings it back once the answer is right.
+  await page.unroute('**/api/search?*')
+  await page.getByRole('button', { name: 'Reload the page' }).click()
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('99213')
+  await expect(page.getByRole('heading', { name: 'Alpha Clinic' })).toBeVisible()
+})
+
 test('at phone width the search collapses and the detail takes the screen', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await searchFor(page, { code: '99213' })
