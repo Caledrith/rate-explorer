@@ -71,6 +71,8 @@ export function useCodeSuggestions(prefix: string, enabled: boolean) {
     enabled,
     queryFn: ({ signal }) => getJson(withQuery('/api/codes', { prefix, limit: 8 }), signal),
     staleTime: Infinity,
+    // While the next prefix loads, the list keeps showing the last one instead of blinking shut.
+    placeholderData: (previous) => previous,
   })
 }
 

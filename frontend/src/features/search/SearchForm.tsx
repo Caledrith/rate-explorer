@@ -5,12 +5,16 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type InputHTMLAttributes,
+  type KeyboardEvent,
+  type ReactNode,
   type Ref,
 } from 'react'
 import { useCodeSuggestions, type SearchParams } from '../../api/queries.ts'
+import type { CodeInfo } from '../../api/types.ts'
 import { Button } from '../../components/ui.tsx'
 import { cx } from '../../lib/cx.ts'
-import { sentenceCase } from '../../lib/format.ts'
+import { codeTypeName, plural, sentenceCase } from '../../lib/format.ts'
 import {
   formatEin,
   validateSearch,
@@ -64,6 +68,12 @@ export function SearchForm({ applied, ready, onSubmit }: Props) {
   const typedCode = useDeferredValue(draft.code.trim().toUpperCase())
   const suggestions = useCodeSuggestions(typedCode, ready && /^[A-Z0-9]{0,7}$/.test(typedCode))
   const listId = useId()
+  // The list of matching codes opens when the code is typed or asked for with the down arrow,
+  // not merely because the field has focus.
+  const [listOpen, setListOpen] = useState(false)
+  const [highlighted, setHighlighted] = useState(-1)
+  const options = suggestions.data ?? []
+  const showList = listOpen && options.length > 0
 
   function change(field: keyof SearchDraft, value: string) {
     setDraft((current) => ({ ...current, [field]: value }))
@@ -71,9 +81,9 @@ export function SearchForm({ applied, ready, onSubmit }: Props) {
     if (errors[field]) setErrors(({ [field]: _removed, ...rest }) => rest)
   }
 
-  function submit(event: FormEvent) {
-    event.preventDefault()
-    const result = validateSearch(draft)
+  function run(search: SearchDraft) {
+    setListOpen(false)
+    const result = validateSearch(search)
     if (!result.ok) {
       setErrors(result.errors)
       return
@@ -81,6 +91,43 @@ export function SearchForm({ applied, ready, onSubmit }: Props) {
     setErrors({})
     setEditing(false)
     onSubmit(result.value)
+  }
+
+  function submit(event: FormEvent) {
+    event.preventDefault()
+    run(draft)
+  }
+
+  /** Picking a code from the list searches for it straight away. */
+  function choose(code: CodeInfo) {
+    const next = { ...draft, code: code.code }
+    setDraft(next)
+    setHighlighted(-1)
+    run(next)
+  }
+
+  function onCodeKey(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      const step = event.key === 'ArrowDown' ? 1 : -1
+      if (!showList) {
+        // Asking for the list starts at its nearer end.
+        setListOpen(true)
+        setHighlighted(step === 1 ? 0 : options.length - 1)
+        return
+      }
+      // One step past either end is "none", which is the typed text itself.
+      setHighlighted((at) => ((at + 1 + step + options.length + 1) % (options.length + 1)) - 1)
+    } else if (event.key === 'Enter' && showList && highlighted >= 0) {
+      event.preventDefault()
+      choose(options[highlighted]!)
+    } else if (event.key === 'Escape' && showList) {
+      // Closes the list only; the typed code stays, and nothing else on the page reacts.
+      event.preventDefault()
+      event.stopPropagation()
+      setListOpen(false)
+      setHighlighted(-1)
+    }
   }
 
   const filterText = [
@@ -120,20 +167,64 @@ export function SearchForm({ applied, ready, onSubmit }: Props) {
           hint="required"
           value={draft.code}
           error={errors.code}
-          onChange={(value) => change('code', value)}
+          onChange={(value) => {
+            change('code', value)
+            setListOpen(true)
+            setHighlighted(-1)
+          }}
           className="md:w-36 lg:w-40"
           inputClassName="font-bold placeholder:font-normal"
           placeholder="e.g. 99213"
           inputRef={codeField}
-          list={listId}
           required
           autoCapitalize="characters"
-        />
-        <datalist id={listId}>
-          {suggestions.data?.map((code) => (
-            <option key={code.code} value={code.code} label={optionLabel(code.type, code.name)} />
-          ))}
-        </datalist>
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={showList}
+          aria-controls={listId}
+          aria-activedescendant={
+            showList && highlighted >= 0 ? `${listId}-${highlighted}` : undefined
+          }
+          onKeyDown={onCodeKey}
+          onBlur={() => {
+            setListOpen(false)
+            setHighlighted(-1)
+          }}
+        >
+          {showList && (
+            <ul
+              id={listId}
+              role="listbox"
+              aria-label="Billing codes in this file"
+              className="absolute top-full left-0 z-20 mt-1 max-h-80 w-[26rem] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-line-strong bg-surface py-1 shadow-lg"
+            >
+              {options.map((code, index) => (
+                <li
+                  key={code.code}
+                  id={`${listId}-${index}`}
+                  role="option"
+                  aria-selected={index === highlighted}
+                  // Keeps the cursor in the field, so the list is not closed before the click lands.
+                  onMouseDown={(event) => event.preventDefault()}
+                  onMouseEnter={() => setHighlighted(index)}
+                  onClick={() => choose(code)}
+                  className={cx(
+                    'flex cursor-pointer items-baseline gap-2.5 px-3 py-1.5',
+                    index === highlighted && 'bg-accent-soft',
+                  )}
+                >
+                  <span className="font-bold tabular-nums">{code.code}</span>
+                  <span className="min-w-0 flex-1 truncate text-meta text-muted">
+                    {optionLabel(code)}
+                  </span>
+                  <span className="text-meta whitespace-nowrap text-muted tabular-nums">
+                    {plural(code.providerCount, 'provider')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Field>
         <Field
           label="Provider NPI"
           hint="optional"
@@ -182,8 +273,10 @@ function draftFrom(applied: SearchParams | null): SearchDraft {
   }
 }
 
-function optionLabel(type: string | null, name: string | null): string {
-  return [type, name && sentenceCase(name)].filter(Boolean).join(' · ')
+/** The file's name for the code. A code with no name of its own is described by its type. */
+function optionLabel(code: CodeInfo): string {
+  if (code.name) return sentenceCase(code.name)
+  return code.type ? `${codeTypeName(code.type)} code` : ''
 }
 
 function Field({
@@ -195,6 +288,7 @@ function Field({
   className,
   inputClassName,
   inputRef,
+  children,
   ...input
 }: {
   label: string
@@ -205,12 +299,9 @@ function Field({
   className?: string
   inputClassName?: string
   inputRef?: Ref<HTMLInputElement>
-  placeholder?: string
-  list?: string
-  required?: boolean
-  inputMode?: 'numeric'
-  autoCapitalize?: string
-}) {
+  /** Something that opens from the field, such as a list of suggestions. */
+  children?: ReactNode
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'className'>) {
   const id = useId()
   const errorId = `${id}-error`
   return (
@@ -218,23 +309,26 @@ function Field({
       <label htmlFor={id} className="text-meta font-semibold">
         {label} <span className="font-normal text-muted">({hint})</span>
       </label>
-      <input
-        id={id}
-        ref={inputRef}
-        type="text"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errorId : undefined}
-        autoComplete="off"
-        spellCheck={false}
-        className={cx(
-          'w-full rounded-lg border bg-surface px-3 py-2 text-lead text-ink placeholder:text-muted/70',
-          error ? 'border-danger' : 'border-line-strong',
-          inputClassName,
-        )}
-        {...input}
-      />
+      <div className="relative">
+        <input
+          id={id}
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
+          autoComplete="off"
+          spellCheck={false}
+          className={cx(
+            'w-full rounded-lg border bg-surface px-3 py-2 text-lead text-ink placeholder:text-muted/70',
+            error ? 'border-danger' : 'border-line-strong',
+            inputClassName,
+          )}
+          {...input}
+        />
+        {children}
+      </div>
       {error && (
         <span id={errorId} role="alert" className="text-meta text-danger">
           {error}

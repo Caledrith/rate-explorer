@@ -6,8 +6,26 @@ import { SearchForm } from './SearchForm.tsx'
 
 afterEach(() => vi.unstubAllGlobals())
 
-function setup(props: Partial<Parameters<typeof SearchForm>[0]> = {}) {
-  mockApi({ '/api/codes': { body: [] } })
+const visits = [
+  {
+    code: '99213',
+    type: 'CPT',
+    name: 'OFFICE/OUTPATIENT VISIT EST',
+    description: null,
+    providerCount: 1013,
+  },
+  {
+    code: '99214',
+    type: 'CPT',
+    name: 'OFFICE/OUTPATIENT VISIT EST',
+    description: null,
+    providerCount: 1031,
+  },
+  { code: '99215', type: null, name: null, description: null, providerCount: 1 },
+]
+
+function setup(props: Partial<Parameters<typeof SearchForm>[0]> = {}, codes: unknown[] = []) {
+  mockApi({ '/api/codes': { body: codes } })
   const onSubmit = vi.fn()
   renderApp(<SearchForm applied={null} ready onSubmit={onSubmit} {...props} />)
   return { onSubmit, user: userEvent.setup() }
@@ -63,4 +81,79 @@ test('search is locked until the rate file has loaded', () => {
 
   expect(screen.getByRole('button', { name: 'Search' })).toBeDisabled()
   expect(screen.getByText('Search unlocks when the rate file has loaded.')).toBeInTheDocument()
+})
+
+test('typing a code lists the matching codes in the file, with their names', async () => {
+  const { user } = setup({}, visits)
+  const code = screen.getByRole('combobox', { name: /Billing code/ })
+
+  // Nothing opens just because the field is there.
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  expect(code).toHaveAttribute('aria-expanded', 'false')
+
+  await user.type(code, '992')
+
+  const options = await screen.findAllByRole('option')
+  expect(options.map((option) => option.textContent)).toEqual([
+    '99213Office/outpatient visit est1,013 providers',
+    '99214Office/outpatient visit est1,031 providers',
+    '992151 provider',
+  ])
+  expect(code).toHaveAttribute('aria-expanded', 'true')
+})
+
+test('the arrow keys pick from the list and Enter searches for the pick', async () => {
+  const { onSubmit, user } = setup({}, visits)
+  const code = screen.getByRole('combobox', { name: /Billing code/ })
+  await user.type(code, '992')
+  await screen.findAllByRole('option')
+
+  await user.keyboard('{ArrowDown}{ArrowDown}')
+  expect(screen.getByRole('option', { selected: true })).toHaveTextContent('99214')
+  expect(code).toHaveAttribute(
+    'aria-activedescendant',
+    screen.getByRole('option', { selected: true }).id,
+  )
+  await user.keyboard('{Enter}')
+
+  expect(onSubmit).toHaveBeenCalledWith({ code: '99214', npi: undefined, ein: undefined })
+  expect(code).toHaveValue('99214')
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+})
+
+test('with nothing picked, Enter searches for what was typed', async () => {
+  const { onSubmit, user } = setup({}, visits)
+  await user.type(screen.getByRole('combobox', { name: /Billing code/ }), '99213')
+  await screen.findAllByRole('option')
+
+  await user.keyboard('{Enter}')
+
+  expect(onSubmit).toHaveBeenCalledWith({ code: '99213', npi: undefined, ein: undefined })
+})
+
+test('clicking a listed code searches for it', async () => {
+  const { onSubmit, user } = setup({}, visits)
+  await user.type(screen.getByRole('combobox', { name: /Billing code/ }), '992')
+
+  await user.click(await screen.findByRole('option', { name: /99213/ }))
+
+  expect(onSubmit).toHaveBeenCalledWith({ code: '99213', npi: undefined, ein: undefined })
+})
+
+test('Escape closes the list, keeps what was typed, and goes no further', async () => {
+  const { user } = setup({}, visits)
+  const outside = vi.fn()
+  document.addEventListener('keydown', outside)
+  const code = screen.getByRole('combobox', { name: /Billing code/ })
+  await user.type(code, '992')
+  await screen.findAllByRole('option')
+  outside.mockClear()
+
+  await user.keyboard('{Escape}')
+
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  expect(code).toHaveValue('992')
+  // The rest of the page (the open rate panel, for one) does not also treat it as "close".
+  expect(outside).not.toHaveBeenCalled()
+  document.removeEventListener('keydown', outside)
 })

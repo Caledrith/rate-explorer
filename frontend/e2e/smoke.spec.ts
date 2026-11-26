@@ -196,6 +196,28 @@ test('empty results explain themselves and offer a way out', async ({ page }) =>
   await expect(page.getByRole('heading', { name: 'Gamma Health' })).toBeVisible()
 })
 
+test('typing a code offers the codes in the file, and picking one searches for it', async ({
+  page,
+}) => {
+  const code = page.getByRole('combobox', { name: /Billing code/ })
+  await code.pressSequentially('992')
+
+  const list = page.getByRole('listbox', { name: 'Billing codes in this file' })
+  await expect(list.getByRole('option')).toHaveText([/99213.*3 providers/, /99214/])
+
+  // By keyboard: down to the second, Enter.
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('99214')
+  await expect(list).toBeHidden()
+
+  // By mouse.
+  await code.fill('9921')
+  await list.getByRole('option', { name: /99213/ }).click()
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('99213')
+})
+
 test('invalid input is caught beside the field', async ({ page }) => {
   await searchFor(page, { code: '99213', npi: '18817774' })
 
