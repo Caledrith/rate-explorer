@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
+import kotlin.coroutines.cancellation.CancellationException
 
 /** One problem with one input field, worded for the person who typed it. */
 data class FieldError(
@@ -59,6 +60,13 @@ fun Application.installHttp() {
         }
         exception<NotFoundException> { call, cause ->
             call.respond(HttpStatusCode.NotFound, ErrorResponse(cause.message ?: "Not found."))
+        }
+        // The client stopped waiting before the answer was written: a search replaced by a
+        // newer one, a status poll cut short, a closed tab. Nothing failed and nobody is
+        // listening for a reply, so this is neither logged as an error nor answered. (Ktor
+        // itself notes an unanswered cancellation at debug level.)
+        exception<CancellationException> { call, _ ->
+            log.debug("The client stopped waiting for {}", call.request.path())
         }
         // Anything unexpected is logged in full and answered without internals.
         exception<Throwable> { call, cause ->
