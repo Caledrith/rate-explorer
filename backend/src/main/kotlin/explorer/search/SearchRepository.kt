@@ -333,6 +333,18 @@ class SearchQueries(
 
     // ---- Why a search came back empty ----
 
+    /** Providers in the file, for any code, whose name contains the text. */
+    fun providerCountForName(
+        sourceFileId: Long,
+        name: String,
+    ): Int =
+        handle
+            .createQuery("select count(*) from provider where source_file_id = :sf and name ilike :name")
+            .bind("sf", sourceFileId)
+            .bind("name", likeContains(name))
+            .mapTo(Int::class.java)
+            .one()
+
     /** How many tax IDs list this NPI anywhere in the file. Zero means the NPI is not in the file. */
     fun providerCountForNpi(
         sourceFileId: Long,
@@ -515,6 +527,7 @@ class SearchQueries(
             bind("code", query.code)
             query.tin?.let { bind("tin", it) }
             query.npi?.let { bind("npi", it) }
+            query.name?.let { bind("name", likeContains(it)) }
         }
 
     private fun Query.bindClass(query: SearchQuery): Query = apply { query.billingClass?.let { bind("class", it) } }
@@ -571,6 +584,7 @@ class SearchQueries(
                 $MATCHED_SELECT
                 where pr.source_file_id = :sf and pr.search_code = :code
                 ${if (query.tin != null) "and pg.tin = :tin" else ""}
+                ${if (query.name != null) "and $NAME_MATCHES" else ""}
                 ${
                 if (query.npi != null) {
                     "and exists (select 1 from provider_group_npi n where n.provider_group_id = pg.id and n.npi = :npi)"
@@ -586,7 +600,18 @@ class SearchQueries(
             )
             """.trimIndent()
 
-        fun likePrefix(prefix: String): String = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        /**
+         * The provider's name as it is shown, which is the most common spelling of it in the
+         * file. A provider is matched as a whole, so all of its rates stay together.
+         */
+        const val NAME_MATCHES =
+            "exists (select 1 from provider named where named.source_file_id = pr.source_file_id and named.tin = pg.tin and named.name ilike :name)"
+
+        private fun likeLiteral(text: String): String = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+        fun likePrefix(prefix: String): String = likeLiteral(prefix) + "%"
+
+        fun likeContains(text: String): String = "%" + likeLiteral(text) + "%"
 
         fun ResultSet.strings(column: String): List<String> {
             @Suppress("UNCHECKED_CAST")

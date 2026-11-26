@@ -33,6 +33,20 @@ class InputNormalizerTest {
     }
 
     @Test
+    fun `a provider name is tidied, and needs enough letters to mean something`() {
+        assertEquals("St Mary's Hospital", parse("code" to "99213", "name" to "  St   Mary's Hospital ").name)
+        assertEquals(null, parse("code" to "99213", "name" to "   ").name)
+        assertEquals(
+            mapOf("name" to "Type at least 2 characters of the provider's name."),
+            errors("code" to "99213", "name" to "a"),
+        )
+        assertEquals(
+            mapOf("name" to "A provider name search is at most 80 characters."),
+            errors("code" to "99213", "name" to "x".repeat(81)),
+        )
+    }
+
+    @Test
     fun `the code is required`() {
         assertEquals(mapOf("code" to "Enter a billing code."), errors("code" to "  "))
         assertEquals(mapOf("code" to "A billing code is 2 to 7 letters or digits."), errors("code" to "99-213"))

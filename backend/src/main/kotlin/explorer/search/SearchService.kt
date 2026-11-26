@@ -51,7 +51,7 @@ class SearchService(
             )
         // "vs median" always compares with every provider for the code, not just the filtered ones.
         val baseline =
-            if (query.hasProviderFilter) db.classSummaries(sourceFileId, query.copy(npi = null, tin = null)) else classes
+            if (query.hasProviderFilter) db.classSummaries(sourceFileId, query.withoutProviderFilter()) else classes
 
         if (totals.providers == 0) {
             return response(query, codeInfo, summary, baseline, emptyList(), 0, providerMiss(db, sourceFileId, query))
@@ -239,11 +239,13 @@ class SearchService(
                     codeCount = if (provider != null) db.codeCountForTin(sourceFileId, tin) else 0,
                 )
             }
-        val unknown = npi?.inFile == false || ein?.inFile == false
+        val name = query.name?.let { NameMiss(it, db.providerCountForName(sourceFileId, it)) }
+        val unknown = npi?.inFile == false || ein?.inFile == false || name?.providerCount == 0
         return NoResults(
             reason = if (unknown) "provider_not_in_file" else "provider_has_no_rates_for_code",
             ein = ein,
             npi = npi,
+            name = name,
         )
     }
 
@@ -262,6 +264,7 @@ class SearchService(
                 npi = query.npi?.toString(),
                 ein = query.tin,
                 einDisplay = query.tin?.let { tinDisplay("ein", it) },
+                name = query.name,
                 billingClass = query.billingClass,
                 sort = query.sort.param,
                 page = query.page,

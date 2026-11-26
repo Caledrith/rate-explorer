@@ -175,6 +175,35 @@ class SearchIntegrationTest {
     }
 
     @Test
+    fun `part of a name narrows to the providers whose name contains it, in any letter case`() {
+        val result = search("code" to "99213", "name" to "  ALPHA  ")
+
+        assertEquals(listOf("Alpha Clinic"), result.providers.map { it.name })
+        assertEquals("ALPHA", result.query.name)
+        assertEquals(1, result.summary.providers)
+        // Rates are still compared with every provider for the code.
+        assertEquals(search("code" to "99213").baseline, result.baseline)
+
+        // It combines with the other filters, and it is text, never a pattern.
+        assertEquals(1, search("code" to "99213", "name" to "clinic", "ein" to "11-1111111").summary.providers)
+        assertEquals(0, search("code" to "99213", "name" to "clinic", "ein" to "22-2222222").summary.providers)
+        assertEquals(0, search("code" to "99213", "name" to "a%c").summary.providers)
+        assertEquals(0, search("code" to "99213", "name" to "Alph_").summary.providers)
+    }
+
+    @Test
+    fun `a name that finds nothing says whether any provider has it at all`() {
+        val nobody = search("code" to "99213", "name" to "zebra").noResults
+        assertEquals("provider_not_in_file", nobody?.reason)
+        assertEquals(NameMiss("zebra", providerCount = 0), nobody?.name)
+
+        // Delta Practice is in the file, but only for G0438.
+        val elsewhere = search("code" to "99213", "name" to "delta").noResults
+        assertEquals("provider_has_no_rates_for_code", elsewhere?.reason)
+        assertEquals(NameMiss("delta", providerCount = 1), elsewhere?.name)
+    }
+
+    @Test
     fun `the class filter narrows providers and their rates but not the summary`() {
         val result = search("code" to "99213", "class" to "institutional")
 

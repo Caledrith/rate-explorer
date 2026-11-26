@@ -21,12 +21,17 @@ data class SearchQuery(
     val code: String,
     val npi: Long? = null,
     val tin: String? = null,
+    /** Text the provider's name must contain, in any letter case. */
+    val name: String? = null,
     val billingClass: String? = null,
     val sort: Sort = Sort.NAME,
     val page: Int = 1,
     val pageSize: Int = 25,
 ) {
-    val hasProviderFilter: Boolean get() = npi != null || tin != null
+    val hasProviderFilter: Boolean get() = npi != null || tin != null || name != null
+
+    /** The same search across every provider. */
+    fun withoutProviderFilter(): SearchQuery = copy(npi = null, tin = null, name = null)
 }
 
 // ---- Search response ----
@@ -50,6 +55,7 @@ data class QueryEcho(
     val npi: String?,
     val ein: String?,
     val einDisplay: String?,
+    val name: String?,
     val billingClass: String?,
     val sort: String,
     val page: Int,
@@ -143,6 +149,13 @@ data class NoResults(
     val closestCodes: List<CodeInfo> = emptyList(),
     val ein: EinMiss? = null,
     val npi: NpiMiss? = null,
+    val name: NameMiss? = null,
+)
+
+data class NameMiss(
+    val name: String,
+    /** Providers in the file, for any code, whose name contains the text. */
+    val providerCount: Int,
 )
 
 data class EinMiss(

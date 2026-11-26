@@ -5,10 +5,10 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 
-private val SEARCH_PARAMS = listOf("code", "npi", "ein", "class", "sort", "page", "pageSize")
+private val SEARCH_PARAMS = listOf("code", "npi", "ein", "name", "class", "sort", "page", "pageSize")
 
 fun Route.searchRoutes(search: SearchService) {
-    // Required: code. Optional: npi, ein, class, sort, page, pageSize.
+    // Required: code. Optional: npi, ein, name, class, sort, page, pageSize.
     get("/api/search") {
         val params = SEARCH_PARAMS.associateWith { call.request.queryParameters[it] }
         call.respond(blocking { search.search(params) })

@@ -13,6 +13,9 @@ object InputNormalizer {
 
     // The schema names professional and institutional, but the filter accepts whatever class the file uses.
     private val CLASS = Regex("^[a-z][a-z_ -]{0,29}$")
+    private val WHITESPACE = Regex("\\s+")
+    private const val NAME_MIN = 2
+    private const val NAME_MAX = 80
 
     fun parse(params: Map<String, String?>): SearchQuery {
         val errors = mutableListOf<FieldError>()
@@ -25,6 +28,19 @@ object InputNormalizer {
 
         val npi = digits(params["npi"], "npi", "An NPI", 10, errors)?.toLong()
         val ein = digits(params["ein"], "ein", "An EIN", 9, errors)
+
+        // Any text is allowed in a name; it is matched literally, never as a pattern.
+        val name =
+            params["name"]
+                ?.trim()
+                ?.split(WHITESPACE)
+                ?.joinToString(" ")
+                ?.takeIf(String::isNotEmpty)
+        when {
+            name == null -> Unit
+            name.length < NAME_MIN -> errors += FieldError("name", "Type at least $NAME_MIN characters of the provider's name.")
+            name.length > NAME_MAX -> errors += FieldError("name", "A provider name search is at most $NAME_MAX characters.")
+        }
 
         val billingClass = params["class"]?.trim()?.lowercase()?.takeIf(String::isNotEmpty)
         if (billingClass != null && !CLASS.matches(billingClass)) {
@@ -40,7 +56,7 @@ object InputNormalizer {
         val pageSize = positiveInt(params["pageSize"], "pageSize", 25, 100, errors)
 
         if (errors.isNotEmpty()) throw ValidationException(errors)
-        return SearchQuery(code, npi, ein, billingClass, sort, page, pageSize)
+        return SearchQuery(code, npi, ein, name, billingClass, sort, page, pageSize)
     }
 
     /** Accepts digits with spaces or hyphens between them ("13-1624096") and returns the digits alone. */
