@@ -103,9 +103,9 @@ other.
 digits. They are skipped and counted, not fatal, and the counts are shown under "About this
 data" in the app.
 
-The same numbers are asserted by `RealFileCheckTest` against the live file. I first computed
-them with a throwaway Python script, so the Kotlin and SQL are checked against an independent
-implementation.
+`RealFileCheckTest` asserts these figures against the live file (for the unusable NPIs, the
+total of 27). I first computed them with a throwaway Python script, so the Kotlin and SQL are
+checked against an independent implementation.
 
 ## Decisions and tradeoffs
 

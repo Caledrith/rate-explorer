@@ -70,6 +70,25 @@ class RealFileCheckTest {
         actual: BigDecimal,
     ) = assertEquals(0, actual.compareTo(BigDecimal(expected)), "expected $expected but was $actual")
 
+    /** Counts taken straight from the tables, for the README's figures that no search returns. */
+    private fun count(sql: String): Int =
+        database.jdbi.withHandle<Int, Exception> { handle ->
+            handle
+                .createQuery(sql)
+                .bind("sf", file.id)
+                .mapTo(Int::class.java)
+                .one()
+        }
+
+    private fun number(sql: String): Double =
+        database.jdbi.withHandle<Double, Exception> { handle ->
+            handle
+                .createQuery(sql)
+                .bind("sf", file.id)
+                .mapTo(Double::class.java)
+                .one()
+        }
+
     @Test
     fun `file totals`() {
         assumeExpectedFile()
@@ -85,6 +104,23 @@ class RealFileCheckTest {
         assertEquals(5_739, file.providerCount)
         // 969 procedure codes (607 CPT, 78 HCPCS, 284 seen only on revenue-code prices) plus 113 revenue codes.
         assertEquals(1_082, file.codeCount)
+        // More than half the items are revenue codes, whose prices name the real code in additional_information.
+        assertEquals(834, count("select count(*) from billing_item where source_file_id = :sf and billing_code_type = 'RC'"))
+    }
+
+    @Test
+    fun `an EIN can cover several provider groups and be spelled several ways`() {
+        assumeExpectedFile()
+        val perEin =
+            """
+            select tin, count(*) as provider_groups, count(distinct business_name) as names
+            from provider_group
+            where source_file_id = :sf
+            group by tin
+            """.trimIndent()
+
+        assertEquals(1_168, count("select count(*) from ($perEin) ein where provider_groups > 1"))
+        assertEquals(124, count("select count(*) from ($perEin) ein where names > 1"))
     }
 
     @Test
@@ -113,6 +149,50 @@ class RealFileCheckTest {
         assertMoney("163.74", institutional.median)
         assertMoney("46.12", institutional.min)
         assertMoney("559.06", institutional.max)
+
+        // What the search collapses: one row per 99213 price per provider group it applies to.
+        val rawRows =
+            """
+            from price_record pr
+            join provider_group pg on pg.source_file_id = pr.source_file_id and pg.ref_id = pr.provider_ref_id
+            where pr.source_file_id = :sf and pr.search_code = '99213'
+            """.trimIndent()
+        assertEquals(6_790, count("select count(*) $rawRows"))
+        // Providers whose every 99213 price is filed under a revenue code. Indexing only
+        // billing_code would lose them.
+        assertEquals(
+            56,
+            count(
+                """
+                select count(*)
+                from (select pg.tin $rawRows group by pg.tin having bool_and(pr.match_kind = 'additional_information')) lost
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun `a revenue-code rate is repeated a median of 80 times, and 58 for 99213`() {
+        assumeExpectedFile()
+        // A rate as the search lists it, counted as the detail panel counts it: by the
+        // distinct places in the file that record it.
+        val medianRepeats =
+            """
+            with rates as (
+                select pr.search_code,
+                       count(distinct (pr.billing_item_id, pr.rate_index, pr.price_index)) as repeats
+                from price_record pr
+                join billing_item bi on bi.id = pr.billing_item_id
+                join provider_group pg on pg.source_file_id = pr.source_file_id and pg.ref_id = pr.provider_ref_id
+                where pr.source_file_id = :sf and pr.match_kind = 'additional_information'
+                group by pr.search_code, pg.tin, pr.negotiated_rate, pr.negotiated_type, pr.billing_class,
+                         pr.setting, pr.service_codes, pr.modifiers, bi.billing_code_type, bi.billing_code
+            )
+            select percentile_cont(0.5) within group (order by repeats) from rates
+            """.trimIndent()
+
+        assertEquals(80.0, number(medianRepeats))
+        assertEquals(58.0, number("$medianRepeats where search_code = '99213'"))
     }
 
     @Test
