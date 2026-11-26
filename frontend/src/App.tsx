@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useStatus } from './api/queries.ts'
+import { useOpenRate } from './features/detail/useOpenRate.ts'
 import { ResultsView } from './features/results/ResultsView.tsx'
 import { SearchForm } from './features/search/SearchForm.tsx'
 import { useSearchState } from './features/search/useSearchState.ts'
@@ -10,10 +11,13 @@ export default function App() {
   const status = useStatus()
   const { search, selectedRate, submit, refine, clearProviderFilter, selectRate } = useSearchState()
 
+  // What is drawn follows the address bar through a cross-fade; see useOpenRate.
+  const openRate = useOpenRate(selectedRate)
+
   const file = status.data?.state === 'ready' ? status.data.file : null
   const ready = file !== null
   // On narrow screens an open rate takes the whole screen; see MatchPanel.
-  const behindPanel = search && selectedRate && ready ? 'max-xl:hidden' : ''
+  const behindPanel = search && openRate && ready ? 'max-xl:hidden' : ''
 
   const start = file && <Welcome file={file} onSearchCode={(code) => submit({ code })} />
   // Once the start screen has been shown, the first search keeps it in place while it
@@ -46,7 +50,7 @@ export default function App() {
         ) : search ? (
           <ResultsView
             search={search}
-            selectedRate={selectedRate}
+            selectedRate={openRate}
             onSearchCode={(code) => submit({ code })}
             onRefine={refine}
             onClearProvider={clearProviderFilter}

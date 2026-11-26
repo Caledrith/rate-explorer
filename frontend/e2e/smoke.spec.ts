@@ -62,6 +62,54 @@ test('the first search keeps the start screen until the results are ready', asyn
   await expect(start).toBeHidden()
 })
 
+test('opening a rate leaves it where it was on screen, beside a panel that does not grow', async ({
+  page,
+}) => {
+  // Wide enough for the panel to sit beside the list, and short enough that the page scrolls.
+  await page.setViewportSize({ width: 1280, height: 420 })
+  // Hold the detail back, to measure the panel while it is still loading.
+  let release!: () => void
+  const held = new Promise<void>((resolve) => (release = resolve))
+  await page.route('**/api/rates/*', async (route) => {
+    await held
+    await route.continue()
+  })
+  await searchFor(page, { code: '99213' })
+
+  const rate = page.getByRole('listitem').filter({ hasText: 'Gamma Health' }).getByRole('button')
+  const list = page.getByRole('list').filter({ has: rate })
+  await rate.scrollIntoViewIfNeeded()
+  const listBefore = (await list.boundingBox())!
+  // Note where the rate is at the instant it is clicked: clicking may scroll it first.
+  await rate.evaluate((button) => {
+    button.addEventListener(
+      'click',
+      () =>
+        document.body.setAttribute('data-top-at-click', String(button.getBoundingClientRect().top)),
+      { capture: true, once: true },
+    )
+  })
+
+  await rate.click()
+  const topBefore = Number(await page.locator('body').getAttribute('data-top-at-click'))
+  const panel = page.getByRole('complementary', { name: 'Why this matched' })
+  await expect(panel).toBeVisible()
+  await expect(panel.getByText('Loading this rate…')).toBeAttached()
+  const loadingHeight = (await panel.boundingBox())!.height
+
+  // The panel took room from the list, so the rows above re-wrapped and grew...
+  const listAfter = (await list.boundingBox())!
+  expect(listAfter.width).toBeLessThan(listBefore.width)
+  expect(listAfter.height).toBeGreaterThan(listBefore.height)
+  // ...yet the rate that was clicked is where it was.
+  expect(Math.abs((await rate.boundingBox())!.y - topBefore)).toBeLessThanOrEqual(1)
+
+  release()
+  await expect(panel).toContainText('This rate is filed as CPT 99213')
+  expect((await panel.boundingBox())!.height).toBe(loadingHeight)
+  expect(Math.abs((await rate.boundingBox())!.y - topBefore)).toBeLessThanOrEqual(1)
+})
+
 test('an NPI narrows providers and hides rates that do not apply to it', async ({ page }) => {
   await searchFor(page, { code: '99213', npi: '1111111111' })
 

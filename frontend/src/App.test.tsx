@@ -149,6 +149,28 @@ test('a shared link opens the same rate, and closing it keeps the search', async
   await user.click(panel)
   await user.keyboard('{Escape}')
   expect(view.location()).toBe('/?code=99213')
+  // The panel leaves, and the keyboard is back on the rate it was opened from.
+  await waitFor(() => expect(panel).not.toBeInTheDocument())
+  expect(document.getElementById('rate-5-111111111')).toHaveFocus()
+})
+
+test('a panel that closes because the list changed does not take the keyboard with it', async () => {
+  mockApi({
+    '/api/status': { body: readyStatus },
+    '/api/codes': { body: [] },
+    '/api/search': { body: searchResponse() },
+    '/api/rates/5-111111111': { body: detail },
+  })
+  const view = renderApp(<App />, '/?code=99213&rate=5-111111111')
+  const panel = await screen.findByRole('complementary', { name: 'Why this matched' })
+  const user = userEvent.setup()
+
+  // Re-sorting may move or remove the open rate, so the panel closes.
+  await user.selectOptions(screen.getByLabelText('Sort'), 'rate_desc')
+
+  expect(view.location()).toBe('/?code=99213&sort=rate_desc')
+  await waitFor(() => expect(panel).not.toBeInTheDocument())
+  expect(screen.getByLabelText('Sort')).toHaveFocus()
 })
 
 test('a new search keeps the previous results on screen until the next ones arrive', async () => {

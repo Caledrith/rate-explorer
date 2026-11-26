@@ -27,19 +27,35 @@ export function MatchPanel({ id, searchedNpi, onClose }: Props) {
   const heading = useRef<HTMLHeadingElement>(null)
 
   useEffect(() => {
-    heading.current?.focus()
+    // Beside the list (the xl breakpoint and up) the panel is already in view, and the page
+    // has just been placed so the chosen rate stays put, so taking focus must not scroll it.
+    // Filling the screen on its own, the panel should be read from its top, which the
+    // browser's usual scroll-to-focus does.
+    const besideList =
+      typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 80rem)').matches
+    heading.current?.focus({ preventScroll: besideList })
   }, [id])
 
+  const closedByReader = useRef(false)
+
   function close() {
+    closedByReader.current = true
     onClose()
-    // Once the list is back on screen, return to the rate the reader came from.
-    requestAnimationFrame(() => {
+  }
+
+  // When the reader closes the panel, return to the rate they came from. This runs as the
+  // panel leaves the page, which is when the list is back on screen and can take focus. A
+  // panel that goes away for another reason (a new sort, a new search) leaves focus alone.
+  useEffect(
+    () => () => {
+      if (!closedByReader.current) return
       const rate = document.getElementById(rateElementId(id))
       // Optional call: not every environment implements scrollIntoView.
       rate?.scrollIntoView?.({ block: 'nearest' })
       rate?.focus({ preventScroll: true })
-    })
-  }
+    },
+    [id],
+  )
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -59,6 +75,8 @@ export function MatchPanel({ id, searchedNpi, onClose }: Props) {
         'flex flex-col bg-surface',
         'max-xl:-mx-4 max-xl:-my-5 max-xl:min-h-dvh md:max-xl:-mx-8',
         'xl:sticky xl:top-4 xl:max-h-[calc(100dvh-2rem)] xl:overflow-y-auto xl:rounded-xl xl:border xl:border-line-strong',
+        // Tall from the moment it opens, so it does not grow when the detail arrives.
+        'xl:min-h-[min(48rem,calc(100dvh-2rem))]',
       )}
     >
       <div className="sticky top-0 flex items-center gap-3 border-b border-line bg-surface px-4 py-2.5 xl:justify-between xl:px-5">
