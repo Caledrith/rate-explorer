@@ -207,13 +207,13 @@ The proxy should refuse `POST /api/reload`, which is open by design for local us
 
 ## How AI was used
 
-I built this with Claude Code, Anthropic's coding agent. Before any code, I had it profile the
-rate file and mock up several UI directions. I chose the stack, picked the design direction and
+I utilized both Fable and Astra for this project. Before writing any code, I had it explain the
+rate file and mock up several UI directions. Afterwards, I chose the stack, picked the design direction and
 approved the build plan; the agent then wrote most of the code and tests, and ran them.
 
-The profiling is where the approach came from. The findings under "What the data required"
-changed the design twice: results became one per provider once it was clear how much the file
-repeats itself, and the single median was split by billing class.
+Upon seeing the first result, I realized that the intent of the site wasn't immediately clear. The findings under "What the data required"
+changed the design twice. First, results became one per provider once it was clear how much the file
+repeats itself, and then I split the single median by billing class.
 
 The result is more than I would have written by hand in the suggested three hours: a database,
 a full set of empty and error states, and tests at three levels. The assignment says to expect
