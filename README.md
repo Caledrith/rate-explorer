@@ -3,10 +3,42 @@
 Search the negotiated rates in a CMS Transparency in Coverage file by billing code, narrow them
 by provider NPI or EIN, and trace any rate back to the exact record it came from.
 
-**Try it:** https://serif.johnmorgannemelka.com is this code running on a small home server.
+**Try it:** https://serif.johnmorgannemelka.com is this code running on my server.
 Search `99213`, add NPI `1881777464`, then select a rate.
 
 ![Results for code 99213 with the "Why this matched" panel open](docs/results.png)
+
+## How AI was used
+
+I utilized both Fable and Astra for this project. Before writing any code, I had it explain the
+rate file and mock up several UI directions. Afterwards, I chose the stack, picked the design direction and
+approved the build plan; the agent then wrote most of the code and tests, and ran them.
+
+Upon seeing the first result, I realized that the intent of the site wasn't immediately clear. The findings under "What the data required"
+changed the design twice. First, results became one per provider once it was clear how much the file
+repeats itself, and then I split the single median by billing class.
+
+The result is more than I would have written by hand in the suggested three hours: a database,
+a full set of empty and error states, and tests at three levels. The assignment says to expect
+more polish when AI is used, so I spent the leverage on robustness rather than on extra features.
+
+## Decisions and tradeoffs
+
+- **Postgres rather than in-memory.** Grouping, medians and paging are plain SQL, restarts do
+  not re-ingest, and a database is already in place for the follow-up. The cost is that
+  running it needs Docker.
+- **Duplicates are collapsed at query time**, so the base tables stay the one source of truth.
+  The largest code joins about 7,000 rows, which takes milliseconds.
+- **One rate file by default.** The index lists a second (Essential Plan, 174 MB); loading it is
+  a configuration change, but there is no plan picker yet.
+- **Each item is parsed as one tree**, so memory is bounded by the largest item (about 100 KB)
+  and one malformed item can be skipped.
+- **Medians count each provider once, per billing class**, and always compare against every
+  provider for the code, even when the search is narrowed.
+- **`additional_information` is trusted only on revenue-code items, and only when it looks like
+  a code.** It is free text in the schema; this rule fits this publisher.
+- **No authentication, and `/api/reload` is open** for local use. The hosted copy refuses
+  reloads and limits request rates at its proxy.
 
 ## Run it
 
@@ -115,33 +147,6 @@ has none): `1e400` is valid JSON, and loading it would break the median for its 
 total of 27). I first computed them with a throwaway Python script, so the Kotlin and SQL are
 checked against an independent implementation.
 
-## Decisions and tradeoffs
-
-- **Postgres, though in-memory was allowed.** Grouping, medians, paging and sorting are SQL
-  the database does well, restarts do not re-ingest, and the "add a database" follow-up is
-  already answered. The cost is that running it needs Docker.
-- **De-duplicate at query time, not in a second table.** The base tables stay the only source
-  of truth. The largest code joins about 7,000 rows, which takes milliseconds. A materialized
-  rate table would be the next step for much larger files.
-- **One rate file by default.** The index lists two (Ambetter, 89 MB; Essential Plan, 174 MB).
-  The schema keys everything by source file and stores the plans, so loading the second is a
-  configuration change (`PLAN_NAME_CONTAINS`), but there is no plan picker in the UI yet.
-- **An item is parsed as one tree.** That bounds memory by the largest single item (about
-  100 KB here), and lets one malformed item be skipped. A file with one enormous item would need
-  streaming inside the item too.
-- **`additional_information` is trusted only on revenue-code items and only when it looks like
-  a code.** It is a free-text field in the schema; this rule fits this publisher.
-- **Medians count each provider's price once**, per billing class. "vs median" always compares
-  with every provider for the code, even when the search is narrowed to one.
-- **The raw record is shown as the file wrote it:** same key order, and `539.40` stays
-  `539.40` rather than becoming `539.4`.
-- **Labels are conservative.** Place-of-service names follow the CMS code set. Modifier glosses
-  are my own short wording, checked against a Medicare contractor's definitions; a modifier I
-  could not check is shown as the bare code. Code descriptions are only what the file itself
-  provides, and the file cuts them at 100 characters.
-- **No authentication, and `/api/reload` is open.** Fine for a local tool, not for a deployed
-  one: the hosted copy refuses reloads and limits request rates at its proxy.
-
 ## Tests
 
 ```bash
@@ -204,17 +209,3 @@ The proxy should refuse `POST /api/reload`, which is open by design for local us
 - A materialized rate table and keyset paging for files ten times this size.
 - Verified labels for every modifier in the file, from the HCPCS release rather than by hand.
 - Authentication and rate limiting before this ran anywhere shared.
-
-## How AI was used
-
-I utilized both Fable and Astra for this project. Before writing any code, I had it explain the
-rate file and mock up several UI directions. Afterwards, I chose the stack, picked the design direction and
-approved the build plan; the agent then wrote most of the code and tests, and ran them.
-
-Upon seeing the first result, I realized that the intent of the site wasn't immediately clear. The findings under "What the data required"
-changed the design twice. First, results became one per provider once it was clear how much the file
-repeats itself, and then I split the single median by billing class.
-
-The result is more than I would have written by hand in the suggested three hours: a database,
-a full set of empty and error states, and tests at three levels. The assignment says to expect
-more polish when AI is used, so I spent the leverage on robustness rather than on extra features.
